@@ -30,6 +30,7 @@ extern fs_dir root_dir;
 
 fs_dir* get_root_dir();
 
+int fs_get_directory(const char* path, fs_dir** buf);
 int fs_add_dir(const char* dir_name);
 bool fs_is_dir(const char* path);
 void init_fs();

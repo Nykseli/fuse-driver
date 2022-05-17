@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#define PATH_LEN_MAX 4096
+
 #ifndef S_IFDIR
 #define S_IFDIR __S_IFDIR // Directory.
 #define S_IFCHR __S_IFCHR // Character device.

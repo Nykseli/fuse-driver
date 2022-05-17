@@ -50,8 +50,13 @@ static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, o
     filler(buffer, ".", NULL, 0); // Current Directory
     filler(buffer, "..", NULL, 0); // Parent Directory
 
+    fs_dir* root;
+    int ret = fs_get_directory(path, &root);
+    if (ret != 0) {
+        return ret;
+    }
+
     const char* key;
-    fs_dir* root = get_root_dir();
     // TODO: filler with stat
     fs_foreach_key(&root->dirs, key) {
         filler(buffer, key, NULL, 0);

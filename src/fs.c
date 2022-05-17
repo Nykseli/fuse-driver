@@ -1,5 +1,6 @@
 /* FROM LSYSFS */
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -37,22 +38,107 @@ static void free_fs_dir(fs_dir* dir) {
     free((void*)dir->name);
 }
 
-// TODO: splitting path: memcopy the dirname into buffer, inhe buffer found the / collect the indexes and set them to null
-//       then it's easy to start the next level from the next index
+/**
+ * Split file path into indexes and set the indexes to the buffer.
+ * path string is modified as a side effect
+ * return the amount of indexes found.
+ * Will return 0 on root dir "/", >= on any other path
+ *
+ * Usage:
+ *
+ * char path_copy[PATH_LEN_MAX];
+ * strcpy(path_copy, path);
+ * int idx_buff[256];
+ * int files = split_file_path(path_copy, idx_buff);
+ * for (int ii = 0; ii < files; ii++) {
+ *     printf("splitted: %s\n", &path_copy[idx_buff[ii]]);
+ * }
+ */
+static int split_file_path(char* path, int* idx_buff) {
+    int idx_count = 1;
+    size_t idx = 0;
+    size_t path_len = strlen(path);
 
-int fs_add_dir(const char* dir_name) {
-    dir_name++; // remove the first /
+    // If checking root
+    if (path_len == 1 && path[0] == '/') {
+        return 0;
+    }
+
+    if (path[0] == '/') {
+        idx = 1;
+        idx_buff[0] = 1;
+    } else {
+        idx_buff[0] = 0;
+    }
+
+    for (; idx < path_len; idx++) {
+        if (path[idx] == '/') {
+            // Set the splitting point
+            path[idx] = '\0';
+            // The start of next path is the next char after null
+            idx_buff[idx_count++] = idx + 1;
+        }
+    }
+
+    return idx_count;
+}
+
+int fs_add_dir(const char* dir_path) {
+
+    char path_copy[PATH_LEN_MAX];
+    strcpy(path_copy, dir_path);
+
+    int idx_buff[256];
+    int files = split_file_path(path_copy, idx_buff);
+    fs_dir* cdir = &root_dir;
+
+    // loop until the last dir before the last is found
+    for (int ii = 0; ii < files - 1; ii++) {
+        char* p = &path_copy[idx_buff[ii]];
+        fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
+        if (!sc_map_found(&cdir->dirs)) {
+            return -ENOENT;
+        }
+        cdir = next;
+    }
+
     fs_dir* new_dir = malloc(sizeof(fs_dir));
-    init_fs_dir(new_dir, dir_name);
-    sc_map_put_sv(&root_dir.dirs, new_dir->name, (void*)new_dir);
+    char* last_file = &path_copy[idx_buff[files - 1]];
+    init_fs_dir(new_dir, last_file);
+    sc_map_put_sv(&cdir->dirs, new_dir->name, (void*)new_dir);
     return 0;
 }
 
-bool fs_is_dir(const char* path) {
-    path++; // Eliminating "/" in the path
+/**
+ * Get directory. If returns != 0, error occurred
+ */
+int fs_get_directory(const char* path, fs_dir** buf) {
+    char path_copy[PATH_LEN_MAX];
+    strcpy(path_copy, path);
 
-    sc_map_get_sv(&root_dir.dirs, path);
-    return sc_map_found(&root_dir.dirs);
+    int idx_buff[256];
+    int files = split_file_path(path_copy, idx_buff);
+    fs_dir* cdir = &root_dir;
+
+    for (int ii = 0; ii < files; ii++) {
+        char* p = &path_copy[idx_buff[ii]];
+        fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
+        if (!sc_map_found(&cdir->dirs)) {
+            return -ENOENT;
+        }
+
+        cdir = next;
+    }
+
+    if (buf != NULL)
+        *buf = cdir;
+    return 0;
+}
+
+// TODO: create function that checks if path is file, dir or non existing
+//       so we don't need to double check
+bool fs_is_dir(const char* path) {
+    return fs_get_directory(path, NULL) == 0;
 }
 
 void init_fs() {
