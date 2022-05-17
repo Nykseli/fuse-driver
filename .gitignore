@@ -1,0 +1,3 @@
+*.o
+fuse_mount
+.vscode
