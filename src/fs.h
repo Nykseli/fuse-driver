@@ -22,14 +22,6 @@ typedef struct fs_file {
     // TODO: stat
 } fs_file;
 
-/* FROM LSYSFS */
-extern int curr_dir_idx;
-extern int curr_file_idx;
-extern int curr_file_content_idx;
-extern fs_dir root_dir;
-
-fs_dir* get_root_dir();
-
 int fs_get_directory(const char* path, fs_dir** buf);
 int fs_add_dir(const char* dir_name);
 bool fs_is_dir(const char* path);

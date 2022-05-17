@@ -6,11 +6,7 @@
 
 #include "fs.h"
 
-fs_dir root_dir;
-
-fs_dir* get_root_dir() {
-    return &root_dir;
-}
+static fs_dir root_dir;
 
 static void init_fs_dir(fs_dir* dir, const char* name) {
     // load_factory arg is the percentage of how full the map can be until realloc
