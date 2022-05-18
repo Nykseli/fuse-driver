@@ -13,6 +13,8 @@ typedef struct fs_dir {
     // TODO: files and folder should probably be in separate maps for faster lookups
     struct sc_map_sv dirs;
     struct sc_map_sv files;
+    // null if root dir
+    struct fs_dir* parent;
     // TODO: stat
 } fs_dir;
 
@@ -21,6 +23,7 @@ typedef struct fs_file {
     size_t size;
     const char* name;
     size_t name_len;
+    fs_dir* parent;
     // TODO: stat
 } fs_file;
 
@@ -46,6 +49,7 @@ bool fs_is_file(path_string* p_string);
 int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset);
 int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t offset);
 int fs_file_truncate(path_string* p_string, off_t size);
+int fs_file_delete(path_string* p_string);
 void init_fs();
 void free_fs();
 

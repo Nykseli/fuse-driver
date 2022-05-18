@@ -18,9 +18,10 @@ char* ps_last_file(path_string* p_string) {
     return &p_string->path_copy[p_string->idx_buff[p_string->files - 1]];
 }
 
-static void init_fs_file(fs_file* file, const char* name) {
+static void init_fs_file(fs_file* file, const char* name, fs_dir* parent) {
     file->size = 0;
     file->data = NULL;
+    file->parent = parent;
     file->name_len = strlen(name);
     file->name = malloc(file->name_len + 1);
     strcpy((char*)file->name, name);
@@ -33,7 +34,7 @@ static void free_fs_file(fs_file* file) {
     }
 }
 
-static void init_fs_dir(fs_dir* dir, const char* name) {
+static void init_fs_dir(fs_dir* dir, const char* name, fs_dir* parent) {
     // load_factory arg is the percentage of how full the map can be until realloc
     // default (0) sets the value to 75 so map can be 75% before realloc.
     // this should be fine
@@ -41,6 +42,7 @@ static void init_fs_dir(fs_dir* dir, const char* name) {
     // TODO: should we prealloc?
     sc_map_init_sv(&dir->dirs, 0, 0);
     sc_map_init_sv(&dir->files, 0, 0);
+    dir->parent = parent;
     dir->name_len = strlen(name);
     dir->name = malloc(dir->name_len + 1);
     strcpy((char*)dir->name, name);
@@ -133,11 +135,11 @@ int fs_add_dir_or_file(path_string* p_string, bool is_dir) {
     char* last_file = ps_last_file(p_string);
     if (is_dir) {
         fs_dir* new_dir = malloc(sizeof(fs_dir));
-        init_fs_dir(new_dir, last_file);
+        init_fs_dir(new_dir, last_file, cdir);
         sc_map_put_sv(&cdir->dirs, new_dir->name, (void*)new_dir);
     } else {
         fs_file* new_file = malloc(sizeof(fs_file));
-        init_fs_file(new_file, last_file);
+        init_fs_file(new_file, last_file, cdir);
         sc_map_put_sv(&cdir->files, new_file->name, (void*)new_file);
     }
 
@@ -197,7 +199,7 @@ bool fs_is_dir(path_string* p_string) {
 }
 
 void init_fs() {
-    init_fs_dir(&root_dir, "/");
+    init_fs_dir(&root_dir, "/", NULL);
 }
 
 void free_fs() {
@@ -266,5 +268,18 @@ int fs_file_truncate(path_string* p_string, off_t size) {
         file->size = size;
     }
 
+    return 0;
+}
+
+int fs_file_delete(path_string* p_string) {
+    fs_file* file;
+    int ret = fs_get_file(p_string, &file);
+    if (ret != 0) {
+        return ret;
+    }
+
+    // TODO: can we just assume that this always works?
+    sc_map_del_sv(&file->parent->files, file->name);
+    free_fs_file(file);
     return 0;
 }
