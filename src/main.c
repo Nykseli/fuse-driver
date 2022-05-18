@@ -18,12 +18,16 @@ static int fdo_mkdir(const char* path, mode_t mode);
 static int fdo_getattr(const char* path, struct stat* st);
 static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi);
 static int fdo_mknod(const char* path, mode_t mode, dev_t rdev);
+static int fdo_read(const char* path, char* buffer, size_t size, off_t offset, struct fuse_file_info* fi);
+static int fdo_write(const char* path, const char* buffer, size_t size, off_t offset, struct fuse_file_info* info);
 
 static struct fuse_operations operations = {
     .getattr = fdo_getattr,
     .readdir = fdo_readdir,
     .mkdir = fdo_mkdir,
     .mknod = fdo_mknod,
+    .write = fdo_write,
+    .read = fdo_read,
 };
 
 static int fdo_getattr(const char* path, struct stat* st) {
@@ -59,7 +63,7 @@ static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, o
     filler(buffer, "..", NULL, 0); // Parent Directory
 
     fs_dir* root;
-    int ret = fs_get_directory(&p_string, &root);
+    int ret = fs_get_directory(&p_string, &root, 0);
     if (ret != 0) {
         return ret;
     }
@@ -85,6 +89,18 @@ static int fdo_mknod(const char* path, mode_t mode, dev_t rdev) {
     path_string p_string;
     create_path_string(&p_string, path);
     return fs_add_dir_or_file(&p_string, false);
+}
+
+static int fdo_read(const char* path, char* buffer, size_t size, off_t offset, struct fuse_file_info* fi) {
+    path_string p_string;
+    create_path_string(&p_string, path);
+    return fs_file_read(&p_string, buffer, size, offset);
+}
+
+static int fdo_write(const char* path, const char* buffer, size_t size, off_t offset, struct fuse_file_info* info) {
+    path_string p_string;
+    create_path_string(&p_string, path);
+    return fs_file_write(&p_string, buffer, size, offset);
 }
 
 int main(int argc, char* argv[]) {

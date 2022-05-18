@@ -1,6 +1,8 @@
 #ifndef FS_H
 #define FS_H
 
+#include <sys/types.h>
+
 #include "sc_map.h"
 #include "util.h"
 
@@ -36,10 +38,13 @@ typedef struct path_string {
 
 int create_path_string(path_string* p_string, const char* path);
 
-int fs_get_directory(path_string* path_string, fs_dir** buf);
+int fs_get_file(path_string* p_string, fs_file** buf);
+int fs_get_directory(path_string* p_string, fs_dir** buf, int offset);
 int fs_add_dir_or_file(path_string* p_string, bool is_dir);
-bool fs_is_dir(path_string* path_string);
-bool fs_is_file(path_string* path_string);
+bool fs_is_dir(path_string* p_string);
+bool fs_is_file(path_string* p_string);
+int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset);
+int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t offset);
 void init_fs();
 void free_fs();
 

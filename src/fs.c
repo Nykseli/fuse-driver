@@ -9,9 +9,14 @@
 static fs_dir root_dir;
 
 // Get a file from index
-#define ps_file(pstring, idx) &(pstring)->path_copy[(pstring)->idx_buff[ii]];
+char* ps_file(path_string* p_string, int idx) {
+    return &p_string->path_copy[p_string->idx_buff[idx]];
+}
+
 // Get name of the last file
-#define ps_last_file(pstring) &(pstring)->path_copy[(pstring)->idx_buff[(pstring)->files - 1]];
+char* ps_last_file(path_string* p_string) {
+    return &p_string->path_copy[p_string->idx_buff[p_string->files - 1]];
+}
 
 static void init_fs_file(fs_file* file, const char* name) {
     file->size = 0;
@@ -115,34 +120,14 @@ bool fs_is_file(path_string* p_string) {
         return false;
     }
 
-    // find the directory that's one before the target file
-    fs_dir* cdir = &root_dir;
-    for (int ii = 0; ii < p_string->files - 1; ii++) {
-        char* p = ps_file(p_string, ii);
-        fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
-        if (!sc_map_found(&cdir->dirs)) {
-            return false;
-        }
-
-        cdir = next;
-    }
-
-    char* last_file = ps_last_file(p_string);
-    sc_map_get_sv(&cdir->files, last_file);
-    return sc_map_found(&cdir->files);
+    return fs_get_file(p_string, NULL) == 0;
 }
 
 int fs_add_dir_or_file(path_string* p_string, bool is_dir) {
-    fs_dir* cdir = &root_dir;
-
-    // loop until the last dir before the last is found
-    for (int ii = 0; ii < p_string->files - 1; ii++) {
-        char* p = ps_file(p_string, ii);
-        fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
-        if (!sc_map_found(&cdir->dirs)) {
-            return -ENOENT;
-        }
-        cdir = next;
+    fs_dir* cdir;
+    int ret = fs_get_directory(p_string, &cdir, 1);
+    if (ret != 0) {
+        return ret;
     }
 
     char* last_file = ps_last_file(p_string);
@@ -160,11 +145,17 @@ int fs_add_dir_or_file(path_string* p_string, bool is_dir) {
 }
 
 /**
- * Get directory. If returns != 0, error occurred
+ * Get directory. If returns != 0, error occurred.
+ * Offset decides the dir relative to path. 0 is last, 1 one before that etc.
+ * If offset is < 0, it's set to 0
  */
-int fs_get_directory(path_string* p_string, fs_dir** buf) {
+int fs_get_directory(path_string* p_string, fs_dir** buf, int offset) {
+    if (offset < 0) {
+        offset = 0;
+    }
+
     fs_dir* cdir = &root_dir;
-    for (int ii = 0; ii < p_string->files; ii++) {
+    for (int ii = 0; ii < p_string->files - offset; ii++) {
         char* p = ps_file(p_string, ii);
         fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
         if (!sc_map_found(&cdir->dirs)) {
@@ -179,10 +170,30 @@ int fs_get_directory(path_string* p_string, fs_dir** buf) {
     return 0;
 }
 
+/**
+ * Get file. If returns != 0, error occurred.
+ */
+int fs_get_file(path_string* p_string, fs_file** buf) {
+    fs_dir* cdir;
+    int ret = fs_get_directory(p_string, &cdir, 1);
+    if (ret != 0) {
+        return ret;
+    }
+
+    fs_file* file = sc_map_get_sv(&cdir->files, ps_last_file(p_string));
+    if (!sc_map_found(&cdir->files)) {
+        return -ENOENT;
+    }
+
+    if (buf != NULL)
+        *buf = file;
+    return 0;
+}
+
 // TODO: create function that checks if path is file, dir or non existing
 //       so we don't need to double check
 bool fs_is_dir(path_string* p_string) {
-    return fs_get_directory(p_string, NULL) == 0;
+    return fs_get_directory(p_string, NULL, 0) == 0;
 }
 
 void init_fs() {
@@ -191,4 +202,45 @@ void init_fs() {
 
 void free_fs() {
     free_fs_dir(&root_dir);
+}
+
+int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset) {
+    fs_file* file;
+    int ret = fs_get_file(p_string, &file);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (file->data == NULL && file->size == 0) {
+        return 0;
+    } else if (size > file->size - offset) {
+        size = file->size - offset;
+    }
+
+    memcpy(buffer, file->data + offset, size);
+    return size;
+}
+
+int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t offset) {
+    fs_file* file;
+    int ret = fs_get_file(p_string, &file);
+    if (ret != 0) {
+        return ret;
+    }
+
+    // if offset is not part of the file, the file will end up containing garbage
+    // TODO: what does offset < 0 officially mean?
+    if (offset < 0 || file->size < (size_t)offset) {
+        return -ESPIPE;
+    }
+
+    file->size = file->size + size;
+    if (file->data != NULL) {
+        file->data = realloc(file->data, file->size);
+    } else {
+        file->data = malloc(file->size);
+    }
+
+    memcpy(file->data + offset, buffer, size);
+    return size;
 }
