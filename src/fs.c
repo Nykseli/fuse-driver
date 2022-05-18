@@ -244,3 +244,27 @@ int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t 
     memcpy(file->data + offset, buffer, size);
     return size;
 }
+
+int fs_file_truncate(path_string* p_string, off_t size) {
+    fs_file* file;
+    int ret = fs_get_file(p_string, &file);
+    if (ret != 0) {
+        return ret;
+    }
+
+    // If size it is negative, remove the size value from file size
+    if (size < 0) {
+        // We cannot trunk the file size to be < 0
+        if (file->size < (size_t)(size * -1))
+            return -ESPIPE;
+
+        file->size = file->size + size;
+    } else if (file->size < (size_t)size) {
+        return -ESPIPE;
+    } else {
+        // else we set the size to size
+        file->size = size;
+    }
+
+    return 0;
+}

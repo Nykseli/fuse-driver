@@ -45,6 +45,7 @@ bool fs_is_dir(path_string* p_string);
 bool fs_is_file(path_string* p_string);
 int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset);
 int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t offset);
+int fs_file_truncate(path_string* p_string, off_t size);
 void init_fs();
 void free_fs();
 
