@@ -8,6 +8,11 @@
 
 static fs_dir root_dir;
 
+// Get a file from index
+#define ps_file(pstring, idx) &(pstring)->path_copy[(pstring)->idx_buff[ii]];
+// Get name of the last file
+#define ps_last_file(pstring) &(pstring)->path_copy[(pstring)->idx_buff[(pstring)->files - 1]];
+
 static void init_fs_file(fs_file* file, const char* name) {
     file->size = 0;
     file->data = NULL;
@@ -96,21 +101,24 @@ static int split_file_path(char* path, int* idx_buff) {
     return idx_count;
 }
 
-bool fs_is_file(const char* path) {
-    char path_copy[PATH_LEN_MAX];
-    strcpy(path_copy, path);
+int create_path_string(path_string* p_string, const char* path) {
+    p_string->path = path;
+    strcpy(p_string->path_copy, path);
+    p_string->files = split_file_path(p_string->path_copy, p_string->idx_buff);
 
-    int idx_buff[256];
-    int files = split_file_path(path_copy, idx_buff);
+    return 0;
+}
+
+bool fs_is_file(path_string* p_string) {
     // root dir is not a file
-    if (files == 0) {
+    if (p_string->files == 0) {
         return false;
     }
 
     // find the directory that's one before the target file
     fs_dir* cdir = &root_dir;
-    for (int ii = 0; ii < files - 1; ii++) {
-        char* p = &path_copy[idx_buff[ii]];
+    for (int ii = 0; ii < p_string->files - 1; ii++) {
+        char* p = ps_file(p_string, ii);
         fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
         if (!sc_map_found(&cdir->dirs)) {
             return false;
@@ -119,23 +127,17 @@ bool fs_is_file(const char* path) {
         cdir = next;
     }
 
-    char* last_file = &path_copy[idx_buff[files - 1]];
+    char* last_file = ps_last_file(p_string);
     sc_map_get_sv(&cdir->files, last_file);
     return sc_map_found(&cdir->files);
 }
 
-int fs_add_dir_or_file(const char* dir_path, bool is_dir) {
-
-    char path_copy[PATH_LEN_MAX];
-    strcpy(path_copy, dir_path);
-
-    int idx_buff[256];
-    int files = split_file_path(path_copy, idx_buff);
+int fs_add_dir_or_file(path_string* p_string, bool is_dir) {
     fs_dir* cdir = &root_dir;
 
     // loop until the last dir before the last is found
-    for (int ii = 0; ii < files - 1; ii++) {
-        char* p = &path_copy[idx_buff[ii]];
+    for (int ii = 0; ii < p_string->files - 1; ii++) {
+        char* p = ps_file(p_string, ii);
         fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
         if (!sc_map_found(&cdir->dirs)) {
             return -ENOENT;
@@ -143,7 +145,7 @@ int fs_add_dir_or_file(const char* dir_path, bool is_dir) {
         cdir = next;
     }
 
-    char* last_file = &path_copy[idx_buff[files - 1]];
+    char* last_file = ps_last_file(p_string);
     if (is_dir) {
         fs_dir* new_dir = malloc(sizeof(fs_dir));
         init_fs_dir(new_dir, last_file);
@@ -160,16 +162,10 @@ int fs_add_dir_or_file(const char* dir_path, bool is_dir) {
 /**
  * Get directory. If returns != 0, error occurred
  */
-int fs_get_directory(const char* path, fs_dir** buf) {
-    char path_copy[PATH_LEN_MAX];
-    strcpy(path_copy, path);
-
-    int idx_buff[256];
-    int files = split_file_path(path_copy, idx_buff);
+int fs_get_directory(path_string* p_string, fs_dir** buf) {
     fs_dir* cdir = &root_dir;
-
-    for (int ii = 0; ii < files; ii++) {
-        char* p = &path_copy[idx_buff[ii]];
+    for (int ii = 0; ii < p_string->files; ii++) {
+        char* p = ps_file(p_string, ii);
         fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
         if (!sc_map_found(&cdir->dirs)) {
             return -ENOENT;
@@ -185,8 +181,8 @@ int fs_get_directory(const char* path, fs_dir** buf) {
 
 // TODO: create function that checks if path is file, dir or non existing
 //       so we don't need to double check
-bool fs_is_dir(const char* path) {
-    return fs_get_directory(path, NULL) == 0;
+bool fs_is_dir(path_string* p_string) {
+    return fs_get_directory(p_string, NULL) == 0;
 }
 
 void init_fs() {

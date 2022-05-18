@@ -27,16 +27,19 @@ static struct fuse_operations operations = {
 };
 
 static int fdo_getattr(const char* path, struct stat* st) {
+    path_string p_string;
+    create_path_string(&p_string, path);
+
     st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
     st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
     st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
     st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
 
-    if (fs_is_dir(path)) {
+    if (fs_is_dir(&p_string)) {
         // TODO: set the mode while creating the directory
         st->st_mode = S_IFDIR | 0755;
         st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
-    } else if (fs_is_file(path)) {
+    } else if (fs_is_file(&p_string)) {
         // TODO: set the mode while creating the file
         st->st_mode = S_IFREG | 0644;
         st->st_nlink = 1;
@@ -49,11 +52,14 @@ static int fdo_getattr(const char* path, struct stat* st) {
 }
 
 static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {
+    path_string p_string;
+    create_path_string(&p_string, path);
+
     filler(buffer, ".", NULL, 0); // Current Directory
     filler(buffer, "..", NULL, 0); // Parent Directory
 
     fs_dir* root;
-    int ret = fs_get_directory(path, &root);
+    int ret = fs_get_directory(&p_string, &root);
     if (ret != 0) {
         return ret;
     }
@@ -70,11 +76,15 @@ static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, o
 }
 
 static int fdo_mkdir(const char* path, mode_t mode) {
-    return fs_add_dir_or_file(path, true);
+    path_string p_string;
+    create_path_string(&p_string, path);
+    return fs_add_dir_or_file(&p_string, true);
 }
 
 static int fdo_mknod(const char* path, mode_t mode, dev_t rdev) {
-    return fs_add_dir_or_file(path, false);
+    path_string p_string;
+    create_path_string(&p_string, path);
+    return fs_add_dir_or_file(&p_string, false);
 }
 
 int main(int argc, char* argv[]) {

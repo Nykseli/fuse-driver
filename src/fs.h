@@ -22,10 +22,24 @@ typedef struct fs_file {
     // TODO: stat
 } fs_file;
 
-int fs_get_directory(const char* path, fs_dir** buf);
-int fs_add_dir_or_file(const char* dir_name, bool is_dir);
-bool fs_is_dir(const char* path);
-bool fs_is_file(const char* path);
+typedef struct path_string {
+    // pointer to the original from fuse funtions
+    const char* path;
+
+    // copy of the path containting the divided paths
+    char path_copy[PATH_LEN_MAX];
+    // indexes of the paths
+    int idx_buff[256];
+    // count of the indexes, if 0. this is the root file
+    int files;
+} path_string;
+
+int create_path_string(path_string* p_string, const char* path);
+
+int fs_get_directory(path_string* path_string, fs_dir** buf);
+int fs_add_dir_or_file(path_string* p_string, bool is_dir);
+bool fs_is_dir(path_string* path_string);
+bool fs_is_file(path_string* path_string);
 void init_fs();
 void free_fs();
 
