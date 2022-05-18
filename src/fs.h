@@ -23,8 +23,9 @@ typedef struct fs_file {
 } fs_file;
 
 int fs_get_directory(const char* path, fs_dir** buf);
-int fs_add_dir(const char* dir_name);
+int fs_add_dir_or_file(const char* dir_name, bool is_dir);
 bool fs_is_dir(const char* path);
+bool fs_is_file(const char* path);
 void init_fs();
 void free_fs();
 

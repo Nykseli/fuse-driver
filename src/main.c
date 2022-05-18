@@ -17,11 +17,13 @@
 static int fdo_mkdir(const char* path, mode_t mode);
 static int fdo_getattr(const char* path, struct stat* st);
 static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi);
+static int fdo_mknod(const char* path, mode_t mode, dev_t rdev);
 
 static struct fuse_operations operations = {
     .getattr = fdo_getattr,
     .readdir = fdo_readdir,
     .mkdir = fdo_mkdir,
+    .mknod = fdo_mknod,
 };
 
 static int fdo_getattr(const char* path, struct stat* st) {
@@ -30,16 +32,16 @@ static int fdo_getattr(const char* path, struct stat* st) {
     st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
     st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
 
-    if (strcmp(path, "/") == 0 || fs_is_dir(path) == 1) {
+    if (fs_is_dir(path)) {
         // TODO: set the mode while creating the directory
         st->st_mode = S_IFDIR | 0755;
         st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
-    } /* else if (fs_is_file(path) == 1) {
+    } else if (fs_is_file(path)) {
         // TODO: set the mode while creating the file
         st->st_mode = S_IFREG | 0644;
         st->st_nlink = 1;
         st->st_size = 1024;
-    } */ else {
+    } else {
         return -ENOENT;
     }
 
@@ -61,11 +63,18 @@ static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, o
     fs_foreach_key(&root->dirs, key) {
         filler(buffer, key, NULL, 0);
     }
+    fs_foreach_key(&root->files, key) {
+        filler(buffer, key, NULL, 0);
+    }
     return 0;
 }
 
 static int fdo_mkdir(const char* path, mode_t mode) {
-    return fs_add_dir(path);
+    return fs_add_dir_or_file(path, true);
+}
+
+static int fdo_mknod(const char* path, mode_t mode, dev_t rdev) {
+    return fs_add_dir_or_file(path, false);
 }
 
 int main(int argc, char* argv[]) {

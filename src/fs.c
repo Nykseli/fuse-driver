@@ -8,6 +8,21 @@
 
 static fs_dir root_dir;
 
+static void init_fs_file(fs_file* file, const char* name) {
+    file->size = 0;
+    file->data = NULL;
+    file->name_len = strlen(name);
+    file->name = malloc(file->name_len + 1);
+    strcpy((char*)file->name, name);
+}
+
+static void free_fs_file(fs_file* file) {
+    free((void*)file->name);
+    if (file->data != NULL) {
+        free(file->data);
+    }
+}
+
 static void init_fs_dir(fs_dir* dir, const char* name) {
     // load_factory arg is the percentage of how full the map can be until realloc
     // default (0) sets the value to 75 so map can be 75% before realloc.
@@ -22,15 +37,17 @@ static void init_fs_dir(fs_dir* dir, const char* name) {
 }
 
 static void free_fs_dir(fs_dir* dir) {
+    fs_file* file;
+    fs_foreach_val(&dir->files, file) {
+        free_fs_file(file);
+    }
+
     fs_dir* val;
     fs_foreach_val(&dir->dirs, val) {
         free_fs_dir(val);
         sc_map_term_sv(&val->dirs);
         sc_map_term_sv(&val->files);
     }
-
-    // TODO: go through files and free them too
-
     free((void*)dir->name);
 }
 
@@ -79,7 +96,35 @@ static int split_file_path(char* path, int* idx_buff) {
     return idx_count;
 }
 
-int fs_add_dir(const char* dir_path) {
+bool fs_is_file(const char* path) {
+    char path_copy[PATH_LEN_MAX];
+    strcpy(path_copy, path);
+
+    int idx_buff[256];
+    int files = split_file_path(path_copy, idx_buff);
+    // root dir is not a file
+    if (files == 0) {
+        return false;
+    }
+
+    // find the directory that's one before the target file
+    fs_dir* cdir = &root_dir;
+    for (int ii = 0; ii < files - 1; ii++) {
+        char* p = &path_copy[idx_buff[ii]];
+        fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
+        if (!sc_map_found(&cdir->dirs)) {
+            return false;
+        }
+
+        cdir = next;
+    }
+
+    char* last_file = &path_copy[idx_buff[files - 1]];
+    sc_map_get_sv(&cdir->files, last_file);
+    return sc_map_found(&cdir->files);
+}
+
+int fs_add_dir_or_file(const char* dir_path, bool is_dir) {
 
     char path_copy[PATH_LEN_MAX];
     strcpy(path_copy, dir_path);
@@ -98,10 +143,17 @@ int fs_add_dir(const char* dir_path) {
         cdir = next;
     }
 
-    fs_dir* new_dir = malloc(sizeof(fs_dir));
     char* last_file = &path_copy[idx_buff[files - 1]];
-    init_fs_dir(new_dir, last_file);
-    sc_map_put_sv(&cdir->dirs, new_dir->name, (void*)new_dir);
+    if (is_dir) {
+        fs_dir* new_dir = malloc(sizeof(fs_dir));
+        init_fs_dir(new_dir, last_file);
+        sc_map_put_sv(&cdir->dirs, new_dir->name, (void*)new_dir);
+    } else {
+        fs_file* new_file = malloc(sizeof(fs_file));
+        init_fs_file(new_file, last_file);
+        sc_map_put_sv(&cdir->files, new_file->name, (void*)new_file);
+    }
+
     return 0;
 }
 
