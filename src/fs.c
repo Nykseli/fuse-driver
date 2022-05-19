@@ -52,7 +52,9 @@ static void free_fs_dir(fs_dir* dir) {
     fs_item* item;
     fs_foreach_val(&dir->items, item) {
         free_fs_item(item);
+        free(item);
     }
+    sc_map_term_sv(&dir->items);
 }
 
 static void init_fs_item(fs_item* item, const char* name, fs_item* parent, FS_ITEM_TYPE type) {
@@ -166,6 +168,7 @@ int fs_dir_delete(path_string* p_string) {
     // TODO: can we just assume that this always works?
     sc_map_del_sv(&fs_item_dir(item->parent).items, item->name);
     free_fs_item(item);
+    free(item);
     return 0;
 }
 
@@ -354,6 +357,7 @@ int fs_file_delete(path_string* p_string) {
     // TODO: can we just assume that this always works?
     sc_map_del_sv(&fs_item_dir(file->parent).items, file->name);
     free_fs_item(file);
+    free(file);
     return 0;
 }
 
@@ -430,6 +434,7 @@ int fs_rename(path_string* oldpath, path_string* newpath) {
             sc_map_del_sv(&old_parent->items, old_item->name);
             sc_map_put_sv(&new_dir->items, new_item->name, old_item);
             free_fs_dir(new_dir);
+            free(new_dir);
         } else { // old is file
             old_item->parent = new_parent_item;
             sc_map_del_sv(&old_parent->items, old_item->name);
@@ -438,6 +443,7 @@ int fs_rename(path_string* oldpath, path_string* newpath) {
             } else { // new is also a file so we override it
                 sc_map_put_sv(&new_parent->items, old_item->name, old_item);
                 free_fs_file(new_file);
+                free(new_file);
             }
         }
     }
