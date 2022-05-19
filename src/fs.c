@@ -1,12 +1,14 @@
-/* FROM LSYSFS */
-
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "fs.h"
 
-static fs_dir root_dir;
+// root is directory type item
+static fs_item root_dir;
+
+static void free_fs_item(fs_item* item);
+static int fs_get_dir_item(path_string* p_string, fs_item** buf, int offset);
 
 // Get a file from index
 char* ps_file(path_string* p_string, int idx) {
@@ -18,49 +20,61 @@ char* ps_last_file(path_string* p_string) {
     return &p_string->path_copy[p_string->idx_buff[p_string->files - 1]];
 }
 
-static void init_fs_file(fs_file* file, const char* name, fs_dir* parent) {
+bool fs_item_is_dir(fs_item* item) {
+    return item->type == FS_DIR;
+}
+
+bool fs_item_is_file(fs_item* item) {
+    return item->type == FS_FILE;
+}
+
+static void init_fs_file(fs_file* file) {
     file->size = 0;
     file->data = NULL;
-    file->parent = parent;
-    file->name_len = strlen(name);
-    file->name = malloc(file->name_len + 1);
-    strcpy((char*)file->name, name);
 }
 
 static void free_fs_file(fs_file* file) {
-    free((void*)file->name);
     if (file->data != NULL) {
         free(file->data);
     }
 }
 
-static void init_fs_dir(fs_dir* dir, const char* name, fs_dir* parent) {
+static void init_fs_dir(fs_dir* dir) {
     // load_factory arg is the percentage of how full the map can be until realloc
     // default (0) sets the value to 75 so map can be 75% before realloc.
     // this should be fine
     // cap is initial capacity. 0 is accepted so use it
     // TODO: should we prealloc?
-    sc_map_init_sv(&dir->dirs, 0, 0);
-    sc_map_init_sv(&dir->files, 0, 0);
-    dir->parent = parent;
-    dir->name_len = strlen(name);
-    dir->name = malloc(dir->name_len + 1);
-    strcpy((char*)dir->name, name);
+    sc_map_init_sv(&dir->items, 0, 0);
 }
 
 static void free_fs_dir(fs_dir* dir) {
-    fs_file* file;
-    fs_foreach_val(&dir->files, file) {
-        free_fs_file(file);
+    fs_item* item;
+    fs_foreach_val(&dir->items, item) {
+        free_fs_item(item);
     }
+}
 
-    fs_dir* val;
-    fs_foreach_val(&dir->dirs, val) {
-        free_fs_dir(val);
-        sc_map_term_sv(&val->dirs);
-        sc_map_term_sv(&val->files);
+static void init_fs_item(fs_item* item, const char* name, fs_item* parent, FS_ITEM_TYPE type) {
+    item->type = type;
+    item->parent = parent;
+    item->name_len = strlen(name);
+    item->name = malloc(item->name_len + 1);
+    strcpy((char*)item->name, name);
+    if (fs_item_is_dir(item)) {
+        init_fs_dir(&fs_item_dir(item));
+    } else {
+        init_fs_file(&fs_item_file(item));
     }
-    free((void*)dir->name);
+}
+
+static void free_fs_item(fs_item* item) {
+    if (fs_item_is_dir(item)) {
+        free_fs_dir(&fs_item_dir(item));
+    } else {
+        free_fs_file(&fs_item_file(item));
+    }
+    free((char*)item->name);
 }
 
 /**
@@ -125,41 +139,79 @@ bool fs_is_file(path_string* p_string) {
     return fs_get_file(p_string, NULL) == 0;
 }
 
-int fs_add_dir_or_file(path_string* p_string, bool is_dir) {
-    fs_dir* cdir;
-    int ret = fs_get_directory(p_string, &cdir, 1);
-    if (ret != 0) {
+int fs_add_item(path_string* p_string, FS_ITEM_TYPE type) {
+    fs_item* cdir;
+    int ret = fs_get_dir_item(p_string, &cdir, 1);
+    if (ret != 0)
         return ret;
-    }
 
     char* last_file = ps_last_file(p_string);
-    if (is_dir) {
-        fs_dir* new_dir = malloc(sizeof(fs_dir));
-        init_fs_dir(new_dir, last_file, cdir);
-        sc_map_put_sv(&cdir->dirs, new_dir->name, (void*)new_dir);
-    } else {
-        fs_file* new_file = malloc(sizeof(fs_file));
-        init_fs_file(new_file, last_file, cdir);
-        sc_map_put_sv(&cdir->files, new_file->name, (void*)new_file);
-    }
-
+    fs_item* new_item = malloc(sizeof(fs_item));
+    init_fs_item(new_item, last_file, cdir, type);
+    sc_map_put_sv(&fs_item_dir(cdir).items, new_item->name, (void*)new_item);
     return 0;
 }
 
 int fs_dir_delete(path_string* p_string) {
-    fs_dir* dir;
-    int ret = fs_get_directory(p_string, &dir, 0);
+    fs_item* item;
+    int ret = fs_get_dir_item(p_string, &item, 0);
     if (ret != 0) {
         return ret;
     }
 
-    if (dir->files.size != 0 || dir->dirs.size) {
+    if (fs_item_dir(item).items.size != 0) {
         return -ENOTEMPTY;
     }
 
     // TODO: can we just assume that this always works?
-    sc_map_del_sv(&dir->parent->dirs, dir->name);
-    free_fs_dir(dir);
+    sc_map_del_sv(&fs_item_dir(item->parent).items, item->name);
+    free_fs_item(item);
+    return 0;
+}
+
+int fs_get_item(path_string* p_string, fs_item** buf, int offset) {
+    if (offset < 0) {
+        offset = 0;
+    }
+
+    fs_dir* cdir = &fs_item_dir(&root_dir);
+    fs_item* found = &root_dir;
+    int loop_count = p_string->files - offset;
+    for (int ii = 0; ii < loop_count; ii++) {
+        char* p = ps_file(p_string, ii);
+        fs_item* next = sc_map_get_sv(&cdir->items, p);
+        if (!sc_map_found(&cdir->items)) {
+            return -ENOENT;
+        } else if (ii < loop_count - 1 && !fs_item_is_dir(next)) {
+            // Files one before the lastone always need to be directories
+            return -ENOTDIR;
+        }
+
+        cdir = &fs_item_dir(next);
+        found = next;
+    }
+
+    if (buf != NULL)
+        *buf = found;
+
+    return 0;
+}
+
+/**
+ * Get fs_item that is always a directory type.
+ */
+int fs_get_dir_item(path_string* p_string, fs_item** buf, int offset) {
+    fs_item* found;
+    int ret = fs_get_item(p_string, &found, offset);
+    if (ret != 0) {
+        return ret;
+    } else if (!fs_item_is_dir(found)) {
+        return -ENOTDIR;
+    }
+
+    if (buf != NULL)
+        *buf = found;
+
     return 0;
 }
 
@@ -169,23 +221,32 @@ int fs_dir_delete(path_string* p_string) {
  * If offset is < 0, it's set to 0
  */
 int fs_get_directory(path_string* p_string, fs_dir** buf, int offset) {
-    if (offset < 0) {
-        offset = 0;
-    }
+    fs_item* dir;
+    int ret = fs_get_dir_item(p_string, &dir, offset);
+    if (ret != 0)
+        return ret;
 
-    fs_dir* cdir = &root_dir;
-    for (int ii = 0; ii < p_string->files - offset; ii++) {
-        char* p = ps_file(p_string, ii);
-        fs_dir* next = sc_map_get_sv(&cdir->dirs, p);
-        if (!sc_map_found(&cdir->dirs)) {
-            return -ENOENT;
-        }
+    if (buf != NULL)
+        *buf = &fs_item_dir(dir);
 
-        cdir = next;
+    return 0;
+}
+
+/**
+ * Get fs_item that is always a file type.
+ */
+int fs_get_file_item(path_string* p_string, fs_item** buf) {
+    fs_item* found;
+    int ret = fs_get_item(p_string, &found, 0);
+    if (ret != 0) {
+        return ret;
+    } else if (fs_item_is_dir(found)) {
+        return -EISDIR;
     }
 
     if (buf != NULL)
-        *buf = cdir;
+        *buf = found;
+
     return 0;
 }
 
@@ -193,19 +254,14 @@ int fs_get_directory(path_string* p_string, fs_dir** buf, int offset) {
  * Get file. If returns != 0, error occurred.
  */
 int fs_get_file(path_string* p_string, fs_file** buf) {
-    fs_dir* cdir;
-    int ret = fs_get_directory(p_string, &cdir, 1);
-    if (ret != 0) {
+    fs_item* dir;
+    int ret = fs_get_file_item(p_string, &dir);
+    if (ret != 0)
         return ret;
-    }
-
-    fs_file* file = sc_map_get_sv(&cdir->files, ps_last_file(p_string));
-    if (!sc_map_found(&cdir->files)) {
-        return -ENOENT;
-    }
 
     if (buf != NULL)
-        *buf = file;
+        *buf = &fs_item_file(dir);
+
     return 0;
 }
 
@@ -216,11 +272,11 @@ bool fs_is_dir(path_string* p_string) {
 }
 
 void init_fs() {
-    init_fs_dir(&root_dir, "/", NULL);
+    init_fs_item(&root_dir, "/", NULL, FS_DIR);
 }
 
 void free_fs() {
-    free_fs_dir(&root_dir);
+    free_fs_item(&root_dir);
 }
 
 int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset) {
@@ -289,15 +345,15 @@ int fs_file_truncate(path_string* p_string, off_t size) {
 }
 
 int fs_file_delete(path_string* p_string) {
-    fs_file* file;
-    int ret = fs_get_file(p_string, &file);
+    fs_item* file;
+    int ret = fs_get_file_item(p_string, &file);
     if (ret != 0) {
         return ret;
     }
 
     // TODO: can we just assume that this always works?
-    sc_map_del_sv(&file->parent->files, file->name);
-    free_fs_file(file);
+    sc_map_del_sv(&fs_item_dir(file->parent).items, file->name);
+    free_fs_item(file);
     return 0;
 }
 
@@ -325,101 +381,62 @@ int fs_rename(path_string* oldpath, path_string* newpath) {
         return -EPERM;
     }
 
-    int ret = 0;
-
-    fs_dir* old_parent = NULL;
-    ret = fs_get_directory(oldpath, &old_parent, 1);
+    fs_item* old_item;
+    int ret = fs_get_item(oldpath, &old_item, 0);
     if (ret != 0) {
         return ret;
     }
 
-    // Are we moving a file or a dir
-    bool is_old_dir = false;
-    bool old_found = false;
+    fs_dir* old_parent = &fs_item_dir(old_item->parent);
+    bool is_old_dir = fs_item_is_dir(old_item);
 
-    fs_dir* old_dir = sc_map_get_sv(&old_parent->dirs, ps_last_file(oldpath));
-    if (sc_map_found(&old_parent->dirs)) {
-        is_old_dir = true;
-        old_found = true;
-    }
-
-    fs_file* old_file = NULL;
-    if (!old_found) {
-        old_file = sc_map_get_sv(&old_parent->files, ps_last_file(oldpath));
-        if (sc_map_found(&old_parent->files)) {
-            old_found = true;
-        }
-    }
-
-    if (!old_found) {
-        return -ENOENT;
-    }
-
-    // After we actually know that the file exist, we need to figure out if
-    // we can move it to the new path
-
-    fs_dir* new_parent = NULL;
-    ret = fs_get_directory(newpath, &new_parent, 1);
-    if (ret != 0) {
+    fs_item* new_parent_item = NULL;
+    ret = fs_get_dir_item(newpath, &new_parent_item, 1);
+    if (ret != 0)
         return ret;
-    }
 
-    bool is_new_dir = false;
+    fs_dir* new_parent = &fs_item_dir(new_parent_item);
+
     bool new_found = false;
-
-    fs_dir* new_dir = sc_map_get_sv(&new_parent->dirs, ps_last_file(newpath));
-    if (sc_map_found(&new_parent->dirs)) {
-        is_new_dir = true;
+    fs_item* new_item = sc_map_get_sv(&new_parent->items, ps_last_file(newpath));
+    if (sc_map_found(&new_parent->items)) {
         new_found = true;
     }
 
-    fs_file* new_file = NULL;
-    if (!new_found) {
-        new_file = sc_map_get_sv(&new_parent->files, ps_last_file(newpath));
-        if (sc_map_found(&new_parent->files)) {
-            new_found = true;
-        }
-    }
+    fs_dir* new_dir = &fs_item_dir(new_item);
+    fs_file* new_file = &fs_item_file(new_item);
+    bool is_new_dir = new_found && fs_item_is_dir(new_item);
 
     // if the new path doesn't exist, we can just move the old path to it
     if (!new_found) {
-        if (is_old_dir) {
-            sc_map_del_sv(&old_parent->dirs, old_dir->name);
-            free((void*)old_dir->name);
-            size_t nlen = strlen(ps_last_file(newpath));
-            old_dir->name = malloc(nlen + 1);
-            old_dir->name_len = nlen;
-            strcpy((char*)old_dir->name, ps_last_file(newpath));
-            sc_map_put_sv(&new_parent->dirs, old_dir->name, old_dir);
-        } else {
-            sc_map_del_sv(&old_parent->files, old_file->name);
-            free((void*)old_file->name);
-            size_t nlen = strlen(ps_last_file(newpath));
-            old_file->name = malloc(nlen + 1);
-            old_file->name_len = nlen;
-            strcpy((char*)old_file->name, ps_last_file(newpath));
-            sc_map_put_sv(&new_parent->files, old_file->name, old_file);
-        }
+        sc_map_del_sv(&old_parent->items, old_item->name);
+        free((void*)old_item->name);
+        size_t nlen = strlen(ps_last_file(newpath));
+        old_item->name = malloc(nlen + 1);
+        old_item->name_len = nlen;
+        old_item->parent = new_parent_item;
+        strcpy((char*)old_item->name, ps_last_file(newpath));
+        sc_map_put_sv(&new_parent->items, old_item->name, old_item);
     } else { // new is found
         if (is_old_dir) {
-            if (is_new_dir) {
-                // We cannot override non-empty dirs
-                if (new_dir->dirs.size != 0 || new_dir->dirs.size != 0)
-                    return -ENOTEMPTY;
-
-                sc_map_del_sv(&old_parent->dirs, old_dir->name);
-                sc_map_put_sv(&new_dir->dirs, new_dir->name, old_dir);
-                free_fs_dir(new_dir);
-            } else {
-                // cannot overwrite non-directory with directory
+            // cannot overwrite non-directory with directory
+            if (!is_new_dir)
                 return -EPERM;
-            }
+            // We cannot override non-empty dirs
+            if (new_dir->items.size != 0)
+                return -ENOTEMPTY;
+
+            old_item->parent = new_parent_item;
+            sc_map_del_sv(&old_parent->items, old_item->name);
+            sc_map_put_sv(&new_dir->items, new_item->name, old_item);
+            free_fs_dir(new_dir);
         } else { // old is file
-            sc_map_del_sv(&old_parent->files, old_file->name);
+            old_item->parent = new_parent_item;
+            sc_map_del_sv(&old_parent->items, old_item->name);
             if (is_new_dir) { // move the old file to new directory
-                sc_map_put_sv(&new_dir->files, old_file->name, old_file);
+                sc_map_put_sv(&new_dir->items, old_item->name, old_item);
             } else { // new is also a file so we override it
-                sc_map_put_sv(&new_parent->files, old_file->name, old_file);
+                sc_map_put_sv(&new_parent->items, old_item->name, old_item);
                 free_fs_file(new_file);
             }
         }
