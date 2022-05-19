@@ -22,6 +22,7 @@ static int fdo_read(const char* path, char* buffer, size_t size, off_t offset, s
 static int fdo_write(const char* path, const char* buffer, size_t size, off_t offset, struct fuse_file_info* info);
 static int fdo_truncate(const char* path, off_t size);
 static int fdo_unlink(const char* path);
+static int fdo_rmdir(const char* path);
 
 static struct fuse_operations operations = {
     .getattr = fdo_getattr,
@@ -32,7 +33,7 @@ static struct fuse_operations operations = {
     .read = fdo_read,
     .truncate = fdo_truncate,
     .unlink = fdo_unlink,
-    // TODO: rmdir
+    .rmdir = fdo_rmdir,
     // TODO: rename
 };
 
@@ -119,6 +120,12 @@ static int fdo_unlink(const char* path) {
     path_string p_string;
     create_path_string(&p_string, path);
     return fs_file_delete(&p_string);
+}
+
+static int fdo_rmdir(const char* path) {
+    path_string p_string;
+    create_path_string(&p_string, path);
+    return fs_dir_delete(&p_string);
 }
 
 int main(int argc, char* argv[]) {

@@ -146,6 +146,23 @@ int fs_add_dir_or_file(path_string* p_string, bool is_dir) {
     return 0;
 }
 
+int fs_dir_delete(path_string* p_string) {
+    fs_dir* dir;
+    int ret = fs_get_directory(p_string, &dir, 0);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (dir->files.size != 0 || dir->dirs.size) {
+        return -ENOTEMPTY;
+    }
+
+    // TODO: can we just assume that this always works?
+    sc_map_del_sv(&dir->parent->dirs, dir->name);
+    free_fs_dir(dir);
+    return 0;
+}
+
 /**
  * Get directory. If returns != 0, error occurred.
  * Offset decides the dir relative to path. 0 is last, 1 one before that etc.
