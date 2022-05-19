@@ -23,6 +23,7 @@ static int fdo_write(const char* path, const char* buffer, size_t size, off_t of
 static int fdo_truncate(const char* path, off_t size);
 static int fdo_unlink(const char* path);
 static int fdo_rmdir(const char* path);
+static int fdo_rename(const char* oldpath, const char* newpath);
 
 static struct fuse_operations operations = {
     .getattr = fdo_getattr,
@@ -34,7 +35,7 @@ static struct fuse_operations operations = {
     .truncate = fdo_truncate,
     .unlink = fdo_unlink,
     .rmdir = fdo_rmdir,
-    // TODO: rename
+    .rename = fdo_rename,
 };
 
 static int fdo_getattr(const char* path, struct stat* st) {
@@ -126,6 +127,14 @@ static int fdo_rmdir(const char* path) {
     path_string p_string;
     create_path_string(&p_string, path);
     return fs_dir_delete(&p_string);
+}
+
+static int fdo_rename(const char* oldpath, const char* newpath) {
+    path_string old;
+    create_path_string(&old, oldpath);
+    path_string new;
+    create_path_string(&new, newpath);
+    return fs_rename(&old, &new);
 }
 
 int main(int argc, char* argv[]) {

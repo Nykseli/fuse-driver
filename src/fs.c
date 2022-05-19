@@ -300,3 +300,130 @@ int fs_file_delete(path_string* p_string) {
     free_fs_file(file);
     return 0;
 }
+
+/**
+ * rename logic from rename man page (man 2 rename)
+ *
+ * If newpath already exists, it will be atomically replaced, so that there is
+ * no point at which another process attempting to access newpath will find it missing.
+ * However, there will probably be a window in which both oldpath and newpath
+ * refer to the file being renamed.
+ *
+ * TODO: implement this when we have hard links
+ * If oldpath and newpath are existing hard links referring to the same file, then rename() does nothing, and returns a success status.
+ *
+ * If newpath exists but the operation fails for some reason, rename() guarantees to leave an instance of newpath in place.
+ *
+ * oldpath can specify a directory. In this case, newpath must either not exist, or it must specify an empty directory.
+ *
+ * TODO: implement this when we have symbolic links
+ * If oldpath refers to a symbolic link, the link is renamed; if newpath refers to a symbolic link, the link will be overwritten.
+ */
+int fs_rename(path_string* oldpath, path_string* newpath) {
+    // we cannot move the root file
+    if (oldpath->files == 0) {
+        return -EPERM;
+    }
+
+    int ret = 0;
+
+    fs_dir* old_parent = NULL;
+    ret = fs_get_directory(oldpath, &old_parent, 1);
+    if (ret != 0) {
+        return ret;
+    }
+
+    // Are we moving a file or a dir
+    bool is_old_dir = false;
+    bool old_found = false;
+
+    fs_dir* old_dir = sc_map_get_sv(&old_parent->dirs, ps_last_file(oldpath));
+    if (sc_map_found(&old_parent->dirs)) {
+        is_old_dir = true;
+        old_found = true;
+    }
+
+    fs_file* old_file = NULL;
+    if (!old_found) {
+        old_file = sc_map_get_sv(&old_parent->files, ps_last_file(oldpath));
+        if (sc_map_found(&old_parent->files)) {
+            old_found = true;
+        }
+    }
+
+    if (!old_found) {
+        return -ENOENT;
+    }
+
+    // After we actually know that the file exist, we need to figure out if
+    // we can move it to the new path
+
+    fs_dir* new_parent = NULL;
+    ret = fs_get_directory(newpath, &new_parent, 1);
+    if (ret != 0) {
+        return ret;
+    }
+
+    bool is_new_dir = false;
+    bool new_found = false;
+
+    fs_dir* new_dir = sc_map_get_sv(&new_parent->dirs, ps_last_file(newpath));
+    if (sc_map_found(&new_parent->dirs)) {
+        is_new_dir = true;
+        new_found = true;
+    }
+
+    fs_file* new_file = NULL;
+    if (!new_found) {
+        new_file = sc_map_get_sv(&new_parent->files, ps_last_file(newpath));
+        if (sc_map_found(&new_parent->files)) {
+            new_found = true;
+        }
+    }
+
+    // if the new path doesn't exist, we can just move the old path to it
+    if (!new_found) {
+        if (is_old_dir) {
+            sc_map_del_sv(&old_parent->dirs, old_dir->name);
+            free((void*)old_dir->name);
+            size_t nlen = strlen(ps_last_file(newpath));
+            old_dir->name = malloc(nlen + 1);
+            old_dir->name_len = nlen;
+            strcpy((char*)old_dir->name, ps_last_file(newpath));
+            sc_map_put_sv(&new_parent->dirs, old_dir->name, old_dir);
+        } else {
+            sc_map_del_sv(&old_parent->files, old_file->name);
+            free((void*)old_file->name);
+            size_t nlen = strlen(ps_last_file(newpath));
+            old_file->name = malloc(nlen + 1);
+            old_file->name_len = nlen;
+            strcpy((char*)old_file->name, ps_last_file(newpath));
+            sc_map_put_sv(&new_parent->files, old_file->name, old_file);
+        }
+    } else { // new is found
+        if (is_old_dir) {
+            if (is_new_dir) {
+                // We cannot override non-empty dirs
+                if (new_dir->dirs.size != 0 || new_dir->dirs.size != 0)
+                    return -ENOTEMPTY;
+
+                sc_map_del_sv(&old_parent->dirs, old_dir->name);
+                sc_map_put_sv(&new_dir->dirs, new_dir->name, old_dir);
+                free_fs_dir(new_dir);
+            } else {
+                // cannot overwrite non-directory with directory
+                return -EPERM;
+            }
+        } else { // old is file
+            sc_map_del_sv(&old_parent->files, old_file->name);
+            if (is_new_dir) { // move the old file to new directory
+                sc_map_put_sv(&new_dir->files, old_file->name, old_file);
+            } else { // new is also a file so we override it
+                sc_map_put_sv(&new_parent->files, old_file->name, old_file);
+                free_fs_file(new_file);
+            }
+        }
+    }
+
+    return 0;
+}
