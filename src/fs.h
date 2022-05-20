@@ -1,6 +1,7 @@
 #ifndef FS_H
 #define FS_H
 
+#include <sys/statvfs.h>
 #include <sys/types.h>
 
 #include "sc_map.h"
@@ -69,6 +70,7 @@ int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t 
 int fs_file_truncate(path_string* p_string, off_t size);
 int fs_file_delete(path_string* p_string);
 int fs_rename(path_string* oldpath, path_string* newpath);
+int fs_statvfs(path_string* path, struct statvfs* buf);
 void init_fs();
 void free_fs();
 

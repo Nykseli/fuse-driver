@@ -213,9 +213,12 @@ static int fdo_flush(const char* path, struct fuse_file_info* fi) {
     return 0;
 }
 
+/**
+ * Both statfs and statvfs syscalls call this. Both are handeled accordingly
+ */
 static int fdo_statfs(const char* path, struct statvfs* buf) {
-    printf("fdo_statfs unimplemented\n");
-    return -ENOSYS;
+    // FUSE makes sure that the file/folder is part of our fs
+    return fs_statvfs(NULL, buf);
 }
 
 static int fdo_opendir(const char* path, struct fuse_file_info* fi) {
@@ -270,6 +273,7 @@ static int fdo_fallocate(const char* path, int mode, off_t offset, off_t length,
 }
 
 int main(int argc, char* argv[]) {
+    // TODO: try to create the directory that's given as an arg
     int ret = 0;
     init_fs();
     ret = fuse_main(argc, argv, &operations, NULL);

@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/sysinfo.h>
 
 #include "fs.h"
 
@@ -447,6 +448,67 @@ int fs_rename(path_string* oldpath, path_string* newpath) {
             }
         }
     }
+
+    return 0;
+}
+
+/**
+ * posix conforming statfs. see https://stackoverflow.com/a/1653168
+ *
+ * when called by fuse with statfs type is set to FUSE_SUPER_MAGIC
+ * path is currently ignored since fuse makes sure that this is part of the
+ * fuse fs.
+ * The 'f_favail', 'f_fsid' and 'f_flag' fields are ignored.
+ */
+int fs_statvfs(path_string* path, struct statvfs* buf) {
+    /**
+     * sysinfo doesn't give completely accurate mem info-
+     * freeram in sysinfo is not exactly "free RAM".
+     * freeram excludes memory used by cached filesystem metadata ("buffers")
+     * and contents ("cache").
+     * Both of these can be a significant portion of RAM but are freed by the
+     * OS when programs need that memory.
+     *
+     * Commit in linux
+     * https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=34e431b0ae398fc54ea69ff85ec700722c9da773
+     * explains that MemAvailable from /proc/meminfo should be used instead
+     *
+     * But for now use meminfo struct to give size hints.
+     *
+     * TODO: figure out how to effectively use meminfo to make sure that we
+     *       don't write things that won't fit ram
+     *
+     * TODO: also consider if we could include swap in the free size
+     *
+     * Discussion here has a lot of good info about /proc/meminfo
+     * https://stackoverflow.com/questions/349889/how-do-you-determine-the-amount-of-linux-system-ram-in-c
+     */
+
+    struct sysinfo si;
+    int ret = sysinfo(&si);
+    if (ret != 0)
+        return ret;
+    uint64_t free_ram = si.freeram;
+    uint64_t total_ram = si.totalram;
+
+    // 4096 is a good cache friendly size
+    buf->f_bsize = 4096;
+    // amount of ram divided by bsize
+    buf->f_blocks = total_ram / buf->f_bsize;
+    // amount of free ram divided by bsize
+    buf->f_bfree = free_ram / buf->f_bsize;
+    // f_bavail ignored, set to 0
+    buf->f_bavail = 0;
+    // do we actually need inode info?
+    buf->f_files = 0;
+    buf->f_ffree = 0;
+    // TODO: enforce namelen
+    // 255 seems to be popular
+    buf->f_namemax = FILE_NAME_MAX;
+    // we don't really have fragments so use bsize
+    buf->f_frsize = buf->f_bsize;
+    // f_fsid ignored, set to 0
+    buf->f_fsid = 0;
 
     return 0;
 }
