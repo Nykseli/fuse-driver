@@ -6,10 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/types.h>
-#include <time.h>
-#include <unistd.h>
 
 #include "fs.h"
 #include "util.h"
@@ -90,28 +87,12 @@ static int fdo_getattr(const char* path, struct stat* st) {
     path_string p_string;
     create_path_string(&p_string, path);
 
-    st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
-    st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
-    st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
-    st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
-
     fs_item* item;
     int ret = fs_get_item(&p_string, &item, 0);
     if (ret != 0)
         return ret;
 
-    if (fs_item_is_dir(item)) {
-        // TODO: set the mode while creating the directory
-        st->st_mode = S_IFDIR | 0755;
-        st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
-    } else if (fs_item_is_file(item)) {
-        // TODO: set the mode while creating the file
-        st->st_mode = S_IFREG | 0644;
-        st->st_nlink = 1;
-        st->st_size = 1024;
-    } else {
-        return -ENOENT;
-    }
+    memcpy(st, &item->st, sizeof(struct stat));
 
     return 0;
 }
@@ -130,9 +111,9 @@ static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, o
     }
 
     const char* key;
-    // TODO: filler with stat
-    fs_foreach_key(&root->items, key) {
-        filler(buffer, key, NULL, 0);
+    const fs_item* item;
+    fs_foreach(&root->items, key, item) {
+        filler(buffer, key, &item->st, 0);
     }
     return 0;
 }
@@ -198,6 +179,8 @@ static int fdo_link(const char* oldpath, const char* newpath) {
 }
 
 static int fdo_open(const char* path, struct fuse_file_info* fi) {
+    // TODO: force files being open when writing etc.
+    //       how many times can you open the same file before closing it?
     // TODO: check access modes when implementing file permissions
     // see https://libfuse.github.io/doxygen/structfuse__operations.html#a14b98c3f7ab97cc2ef8f9b1d9dc0709d
     return 0;

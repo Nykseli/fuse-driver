@@ -2,6 +2,7 @@
 #define UTIL_H
 
 #include <stdbool.h>
+#include <sys/stat.h>
 
 // FUSE fs magic for statfs
 #define FUSE_SUPER_MAGIC 0x65735546

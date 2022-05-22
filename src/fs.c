@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/sysinfo.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "fs.h"
 
@@ -22,16 +24,30 @@ char* ps_last_file(path_string* p_string) {
 }
 
 bool fs_item_is_dir(fs_item* item) {
-    return item->type == FS_DIR;
+    return item->st.st_mode & S_IFDIR;
 }
 
 bool fs_item_is_file(fs_item* item) {
-    return item->type == FS_FILE;
+    return item->st.st_mode & S_IFREG;
 }
 
-static void init_fs_file(fs_file* file) {
-    file->size = 0;
+static void init_fs_file(fs_item* file_item) {
+    fs_file* file = &fs_item_file(file_item);
     file->data = NULL;
+    file->item = file_item;
+    struct stat* st = &file_item->st;
+    st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
+    st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
+    st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
+    st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
+    st->st_ctime = time(NULL); // The last status "c"change of the file/directory is right now
+    st->st_size = 0; // file is empty when created
+    st->st_blksize = FS_BLOCK_SIZE; // 4k is our block size
+    st->st_mode = S_IFREG | 0644; // Set this dir. 0644 is the default dir perms in POSIX
+    st->st_nlink = 1;
+    st->st_ino = 0; // We don't care about inodes so set to 0
+    st->st_dev = 0; // Not a special file so set to 0
+    st->st_blocks = 0; // Ignore this until we find a use for it
 }
 
 static void free_fs_file(fs_file* file) {
@@ -40,13 +56,28 @@ static void free_fs_file(fs_file* file) {
     }
 }
 
-static void init_fs_dir(fs_dir* dir) {
+static void init_fs_dir(fs_item* dir_item) {
+    fs_dir* dir = &fs_item_dir(dir_item);
+    dir->item = dir_item;
     // load_factory arg is the percentage of how full the map can be until realloc
     // default (0) sets the value to 75 so map can be 75% before realloc.
     // this should be fine
     // cap is initial capacity. 0 is accepted so use it
     // TODO: should we prealloc?
     sc_map_init_sv(&dir->items, 0, 0);
+    struct stat* st = &dir_item->st;
+    st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
+    st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
+    st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
+    st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
+    st->st_ctime = time(NULL); // The last status "c"change of the file/directory is right now
+    st->st_size = FS_BLOCK_SIZE; // 4k seems to be the normal allocated mem for directories so use it for now
+    st->st_blksize = FS_BLOCK_SIZE; // 4k is our block size
+    st->st_mode = S_IFDIR | 0755; // Set this dir. 0755 is the default dir perms in POSIX
+    st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
+    st->st_ino = 0; // We don't care about inodes so set to 0
+    st->st_dev = 0; // Not a special file so set to 0
+    st->st_blocks = 0; // Ignore this until we find a use for it
 }
 
 static void free_fs_dir(fs_dir* dir) {
@@ -59,15 +90,14 @@ static void free_fs_dir(fs_dir* dir) {
 }
 
 static void init_fs_item(fs_item* item, const char* name, fs_item* parent, FS_ITEM_TYPE type) {
-    item->type = type;
     item->parent = parent;
     item->name_len = strlen(name);
     item->name = malloc(item->name_len + 1);
     strcpy((char*)item->name, name);
-    if (fs_item_is_dir(item)) {
-        init_fs_dir(&fs_item_dir(item));
+    if (type == FS_DIR) {
+        init_fs_dir(item);
     } else {
-        init_fs_file(&fs_item_file(item));
+        init_fs_file(item);
     }
 }
 
@@ -290,10 +320,11 @@ int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset)
         return ret;
     }
 
-    if (file->data == NULL && file->size == 0) {
+    uint64_t file_size = fs_item_size(file);
+    if (file->data == NULL && file_size == 0) {
         return 0;
-    } else if (size > file->size - offset) {
-        size = file->size - offset;
+    } else if (size > file_size - offset) {
+        size = file_size - offset;
     }
 
     memcpy(buffer, file->data + offset, size);
@@ -307,19 +338,23 @@ int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t 
         return ret;
     }
 
+    off_t file_size = fs_item_size(file);
+
     // if offset is not part of the file, the file will end up containing garbage
     // TODO: what does offset < 0 officially mean?
-    if (offset < 0 || file->size < (size_t)offset) {
+    if (offset < 0 || file_size < offset) {
         return -ESPIPE;
     }
 
-    file->size = file->size + size;
-    if (file->data != NULL) {
-        file->data = realloc(file->data, file->size);
-    } else {
-        file->data = malloc(file->size);
+    off_t new_size = size;
+    if (file->data == NULL) {
+        file->data = malloc(size);
+    } else if (offset + (off_t)size > file_size) {
+        new_size = offset + size;
+        file->data = realloc(file->data, new_size);
     }
 
+    fs_item_size(file) = new_size;
     memcpy(file->data + offset, buffer, size);
     return size;
 }
@@ -331,18 +366,20 @@ int fs_file_truncate(path_string* p_string, off_t size) {
         return ret;
     }
 
+    off_t file_size = fs_item_size(file);
+
     // If size it is negative, remove the size value from file size
     if (size < 0) {
         // We cannot trunk the file size to be < 0
-        if (file->size < (size_t)(size * -1))
+        if (file_size < size * -1)
             return -ESPIPE;
 
-        file->size = file->size + size;
-    } else if (file->size < (size_t)size) {
+        fs_item_size(file) = file_size + size;
+    } else if (file_size < size) {
         return -ESPIPE;
     } else {
         // else we set the size to size
-        file->size = size;
+        fs_item_size(file) = size;
     }
 
     return 0;
@@ -492,7 +529,7 @@ int fs_statvfs(path_string* path, struct statvfs* buf) {
     uint64_t total_ram = si.totalram;
 
     // 4096 is a good cache friendly size
-    buf->f_bsize = 4096;
+    buf->f_bsize = FS_BLOCK_SIZE;
     // amount of ram divided by bsize
     buf->f_blocks = total_ram / buf->f_bsize;
     // amount of free ram divided by bsize

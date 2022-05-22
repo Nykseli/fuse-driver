@@ -1,34 +1,43 @@
 #ifndef FS_H
 #define FS_H
 
+#include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
 #include "sc_map.h"
 #include "util.h"
 
+// 4096 is a good cache friendly size
+#define FS_BLOCK_SIZE 4096
+
 typedef enum FS_ITEM_TYPE {
     FS_DIR,
     FS_FILE
 } FS_ITEM_TYPE;
 
+struct fs_item;
+
 typedef struct fs_dir {
+    struct fs_item* item;
     struct sc_map_sv items;
 } fs_dir;
 
 typedef struct fs_file {
+    struct fs_item* item;
+    // Data length can be found from item's stat struct (st_size)
     uint8_t* data;
-    size_t size;
 } fs_file;
 
 typedef struct fs_item {
+    // TODO: FILE_NAME_MAX + 1 fixed length array so we don't need to alloc/free
     const char* name;
     size_t name_len;
     // null if root dir
     // will always point to a fs_dir item
     struct fs_item* parent;
     // TODO: stat and replace type with it
-    FS_ITEM_TYPE type;
+    struct stat st;
     union {
         fs_dir dir;
         fs_file file;
@@ -51,6 +60,8 @@ typedef struct path_string {
 
 #define fs_item_dir(_item) (_item)->as.dir
 #define fs_item_file(_item) (_item)->as.file
+// size of the union items
+#define fs_item_size(_item) (_item)->item->st.st_size
 
 int create_path_string(path_string* p_string, const char* path);
 
