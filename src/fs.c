@@ -42,11 +42,11 @@ static void init_fs_file(fs_item* file_item) {
     st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
     st->st_ctime = time(NULL); // The last status "c"change of the file/directory is right now
     st->st_size = 0; // file is empty when created
-    st->st_blksize = FS_BLOCK_SIZE; // 4k is our block size
+    st->st_blksize = 0; // blksize is ignored by fuse
     st->st_mode = S_IFREG | 0644; // Set this dir. 0644 is the default dir perms in POSIX
     st->st_nlink = 1;
-    st->st_ino = 0; // We don't care about inodes so set to 0
-    st->st_dev = 0; // Not a special file so set to 0
+    st->st_ino = 0; // Inodes are automatically handled by fuse
+    st->st_dev = 0; // Set by fuse so it can be anything fuse decides it to be
     st->st_blocks = 0; // Ignore this until we find a use for it
 }
 
@@ -72,11 +72,11 @@ static void init_fs_dir(fs_item* dir_item) {
     st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
     st->st_ctime = time(NULL); // The last status "c"change of the file/directory is right now
     st->st_size = FS_BLOCK_SIZE; // 4k seems to be the normal allocated mem for directories so use it for now
-    st->st_blksize = FS_BLOCK_SIZE; // 4k is our block size
+    st->st_blksize = 0; // blksize is ignored by fuse
     st->st_mode = S_IFDIR | 0755; // Set this dir. 0755 is the default dir perms in POSIX
     st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
-    st->st_ino = 0; // We don't care about inodes so set to 0
-    st->st_dev = 0; // Not a special file so set to 0
+    st->st_ino = 0; // Inodes are automatically handled by fuse
+    st->st_dev = 0; // Set by fuse so it can be anything fuse decides it to be
     st->st_blocks = 0; // Ignore this until we find a use for it
 }
 
