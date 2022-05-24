@@ -18,10 +18,12 @@ endif
 
 all: executable
 
-executable: $(SRC_OBJECTS)
+executable: $(BIN_NAME)
+	@ echo 'To mount: ./'$(BIN_NAME)' -f [mount point]'
+
+$(BIN_NAME): $(SRC_OBJECTS)
 	@ printf "%8s %-40s %s\n" $(COMPILER) $(BIN_NAME)
 	@ $(COMPILER) $(CFLAGS) $^ -o $(BIN_NAME) $(LIBS)
-	@ echo 'To mount: ./'$(BIN_NAME)' -f [mount point]'
 
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.c $(SRC_HEADERS)
 	@ printf "%8s %-40s %s\n" $(COMPILER) $<
