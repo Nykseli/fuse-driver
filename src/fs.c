@@ -7,6 +7,9 @@
 
 #include "fs.h"
 
+#define DEF_DIR_MODE S_IFDIR | 0755
+#define DEF_FILE_MODE S_IFREG | 0644
+
 // root is directory type item
 static fs_item root_dir;
 
@@ -31,7 +34,7 @@ bool fs_item_is_file(fs_item* item) {
     return item->st.st_mode & S_IFREG;
 }
 
-static void init_fs_file(fs_item* file_item) {
+static void init_fs_file(fs_item* file_item, mode_t mode) {
     fs_file* file = &fs_item_file(file_item);
     file->data = NULL;
     file->item = file_item;
@@ -43,7 +46,7 @@ static void init_fs_file(fs_item* file_item) {
     st->st_ctime = time(NULL); // The last status "c"change of the file/directory is right now
     st->st_size = 0; // file is empty when created
     st->st_blksize = 0; // blksize is ignored by fuse
-    st->st_mode = S_IFREG | 0644; // Set this dir. 0644 is the default dir perms in POSIX
+    st->st_mode = mode;
     st->st_nlink = 1;
     st->st_ino = 0; // Inodes are automatically handled by fuse
     st->st_dev = 0; // Set by fuse so it can be anything fuse decides it to be
@@ -56,7 +59,7 @@ static void free_fs_file(fs_file* file) {
     }
 }
 
-static void init_fs_dir(fs_item* dir_item) {
+static void init_fs_dir(fs_item* dir_item, mode_t mode) {
     fs_dir* dir = &fs_item_dir(dir_item);
     dir->item = dir_item;
     // load_factory arg is the percentage of how full the map can be until realloc
@@ -73,7 +76,7 @@ static void init_fs_dir(fs_item* dir_item) {
     st->st_ctime = time(NULL); // The last status "c"change of the file/directory is right now
     st->st_size = FS_BLOCK_SIZE; // 4k seems to be the normal allocated mem for directories so use it for now
     st->st_blksize = 0; // blksize is ignored by fuse
-    st->st_mode = S_IFDIR | 0755; // Set this dir. 0755 is the default dir perms in POSIX
+    st->st_mode = mode;
     st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
     st->st_ino = 0; // Inodes are automatically handled by fuse
     st->st_dev = 0; // Set by fuse so it can be anything fuse decides it to be
@@ -89,15 +92,15 @@ static void free_fs_dir(fs_dir* dir) {
     sc_map_term_sv(&dir->items);
 }
 
-static void init_fs_item(fs_item* item, const char* name, fs_item* parent, FS_ITEM_TYPE type) {
+static void init_fs_item(fs_item* item, const char* name, fs_item* parent, FS_ITEM_TYPE type, mode_t mode) {
     item->parent = parent;
     item->name_len = strlen(name);
     item->name = malloc(item->name_len + 1);
     strcpy((char*)item->name, name);
     if (type == FS_DIR) {
-        init_fs_dir(item);
+        init_fs_dir(item, mode);
     } else {
-        init_fs_file(item);
+        init_fs_file(item, mode);
     }
 }
 
@@ -155,6 +158,19 @@ static int split_file_path(char* path, int* idx_buff) {
     return idx_count;
 }
 
+static int add_item(path_string* p_string, FS_ITEM_TYPE type, mode_t mode) {
+    fs_item* cdir;
+    int ret = fs_get_dir_item(p_string, &cdir, 1);
+    if (ret != 0)
+        return ret;
+
+    char* last_file = ps_last_file(p_string);
+    fs_item* new_item = malloc(sizeof(fs_item));
+    init_fs_item(new_item, last_file, cdir, type, mode);
+    sc_map_put_sv(&fs_item_dir(cdir).items, new_item->name, (void*)new_item);
+    return 0;
+}
+
 int create_path_string(path_string* p_string, const char* path) {
     p_string->path = path;
     strcpy(p_string->path_copy, path);
@@ -173,16 +189,11 @@ bool fs_is_file(path_string* p_string) {
 }
 
 int fs_add_item(path_string* p_string, FS_ITEM_TYPE type) {
-    fs_item* cdir;
-    int ret = fs_get_dir_item(p_string, &cdir, 1);
-    if (ret != 0)
-        return ret;
-
-    char* last_file = ps_last_file(p_string);
-    fs_item* new_item = malloc(sizeof(fs_item));
-    init_fs_item(new_item, last_file, cdir, type);
-    sc_map_put_sv(&fs_item_dir(cdir).items, new_item->name, (void*)new_item);
-    return 0;
+    if (type == FS_DIR) {
+        return add_item(p_string, FS_DIR, DEF_DIR_MODE);
+    } else {
+        return add_item(p_string, FS_FILE, DEF_FILE_MODE);
+    }
 }
 
 int fs_dir_delete(path_string* p_string) {
@@ -306,7 +317,7 @@ bool fs_is_dir(path_string* p_string) {
 }
 
 void init_fs() {
-    init_fs_item(&root_dir, "/", NULL, FS_DIR);
+    init_fs_item(&root_dir, "/", NULL, FS_DIR, DEF_DIR_MODE);
 }
 
 void free_fs() {
@@ -548,4 +559,8 @@ int fs_statvfs(path_string* path, struct statvfs* buf) {
     buf->f_fsid = 0;
 
     return 0;
+}
+
+int fs_mknod(path_string* path, mode_t mode, dev_t rdev) {
+    return add_item(path, FS_FILE, mode);
 }

@@ -70,7 +70,7 @@ int create_path_string(path_string* p_string, const char* path);
 int fs_get_file(path_string* p_string, fs_file** buf);
 int fs_get_item(path_string* p_string, fs_item** buf, int offset);
 int fs_get_directory(path_string* p_string, fs_dir** buf, int offset);
-int fs_add_item(path_string* p_string, FS_ITEM_TYPE type);
+int fs_add_item(path_string* p_string, FS_ITEM_TYPE type) __attribute__ ((deprecated));
 bool fs_is_dir(path_string* p_string);
 bool fs_is_file(path_string* p_string);
 bool fs_item_is_dir(fs_item* item);
@@ -82,6 +82,7 @@ int fs_file_truncate(path_string* p_string, off_t size);
 int fs_file_delete(path_string* p_string);
 int fs_rename(path_string* oldpath, path_string* newpath);
 int fs_statvfs(path_string* path, struct statvfs* buf);
+int fs_mknod(path_string* path, mode_t mode, dev_t rdev);
 void init_fs();
 void free_fs();
 

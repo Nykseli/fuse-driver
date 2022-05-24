@@ -127,7 +127,7 @@ static int fdo_mkdir(const char* path, mode_t mode) {
 static int fdo_mknod(const char* path, mode_t mode, dev_t rdev) {
     path_string p_string;
     create_path_string(&p_string, path);
-    return fs_add_item(&p_string, FS_FILE);
+    return fs_mknod(&p_string, mode, rdev);
 }
 
 static int fdo_read(const char* path, char* buffer, size_t size, off_t offset, struct fuse_file_info* fi) {
@@ -259,6 +259,8 @@ int main(int argc, char* argv[]) {
     // TODO: try to create the directory that's given as an arg
     int ret = 0;
     init_fs();
+    // TODO: by default fuse uses umask 0022 so file mode cannot be 777 etc
+    //       manually set umask to be 0000 so user can define the file mode freely
     ret = fuse_main(argc, argv, &operations, NULL);
     free_fs();
     return ret;
