@@ -564,6 +564,10 @@ int fs_mknod(path_string* path, mode_t mode, dev_t rdev) {
     return add_item(path, FS_FILE, mode);
 }
 
+int fs_mkdir(path_string* path, mode_t mode) {
+    return add_item(path, FS_DIR, S_IFDIR | mode);
+}
+
 int fs_chown(path_string* path, uid_t uid, gid_t gid) {
     // TODO: make sure that the user can actually set the perms
     fs_item* item;

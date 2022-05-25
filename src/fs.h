@@ -96,6 +96,7 @@ int fs_file_delete(path_string* p_string);
 int fs_rename(path_string* oldpath, path_string* newpath);
 int fs_statvfs(path_string* path, struct statvfs* buf);
 int fs_mknod(path_string* path, mode_t mode, dev_t rdev);
+int fs_mkdir(path_string* path, mode_t mode);
 int fs_chown(path_string* path, uid_t uid, gid_t gid);
 int fs_chmod(path_string* path, mode_t mode);
 int fs_access(path_string* path, mode_t mode);

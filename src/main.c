@@ -121,7 +121,7 @@ static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, o
 static int fdo_mkdir(const char* path, mode_t mode) {
     path_string p_string;
     create_path_string(&p_string, path);
-    return fs_add_item(&p_string, FS_DIR);
+    return fs_mkdir(&p_string, mode);
 }
 
 static int fdo_mknod(const char* path, mode_t mode, dev_t rdev) {
