@@ -7,7 +7,7 @@
 // FUSE fs magic for statfs
 #define FUSE_SUPER_MAGIC 0x65735546
 
-#define PATH_LEN_MAX 4096
+#define PATH_LEN_MAX 4095
 #define FILE_NAME_MAX 255 // 256 - space for null char
 
 #ifndef S_IFDIR

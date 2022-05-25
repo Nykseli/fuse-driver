@@ -95,7 +95,6 @@ static void free_fs_dir(fs_dir* dir) {
 static void init_fs_item(fs_item* item, const char* name, fs_item* parent, FS_ITEM_TYPE type, mode_t mode) {
     item->parent = parent;
     item->name_len = strlen(name);
-    item->name = malloc(item->name_len + 1);
     strcpy((char*)item->name, name);
     if (type == FS_DIR) {
         init_fs_dir(item, mode);
@@ -110,7 +109,6 @@ static void free_fs_item(fs_item* item) {
     } else {
         free_fs_file(&fs_item_file(item));
     }
-    free((char*)item->name);
 }
 
 /**
@@ -171,10 +169,13 @@ static int add_item(path_string* p_string, FS_ITEM_TYPE type, mode_t mode) {
     return 0;
 }
 
-int create_path_string(path_string* p_string, const char* path) {
+int parse_path_string(path_string* p_string, const char* path) {
+    // fuse take care of length of the path so we don't need to check it here
     p_string->path = path;
     strcpy(p_string->path_copy, path);
     p_string->files = split_file_path(p_string->path_copy, p_string->idx_buff);
+    if (strlen(ps_last_file(p_string)) > FILE_NAME_MAX)
+        return -ENAMETOOLONG;
 
     return 0;
 }
@@ -463,9 +464,7 @@ int fs_rename(path_string* oldpath, path_string* newpath) {
     // if the new path doesn't exist, we can just move the old path to it
     if (!new_found) {
         sc_map_del_sv(&old_parent->items, old_item->name);
-        free((void*)old_item->name);
         size_t nlen = strlen(ps_last_file(newpath));
-        old_item->name = malloc(nlen + 1);
         old_item->name_len = nlen;
         old_item->parent = new_parent_item;
         strcpy((char*)old_item->name, ps_last_file(newpath));

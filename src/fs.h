@@ -29,10 +29,13 @@ typedef struct fs_file {
     uint8_t* data;
 } fs_file;
 
+#if FILE_NAME_MAX > 255
+#error "fs_item name_len only supports values that fit into uint8_t "
+#endif
+
 typedef struct fs_item {
-    // TODO: FILE_NAME_MAX + 1 fixed length array so we don't need to alloc/free
-    const char* name;
-    size_t name_len;
+    const char name[FILE_NAME_MAX + 1];
+    uint8_t name_len;
     // null if root dir
     // will always point to a fs_dir item
     struct fs_item* parent;
@@ -49,7 +52,7 @@ typedef struct path_string {
     const char* path;
 
     // copy of the path containting the divided paths
-    char path_copy[PATH_LEN_MAX];
+    char path_copy[PATH_LEN_MAX + 1];
     // indexes of the paths
     // TODO: collect the length of paths so we do faster map lookups
     //       this requires some changes in sc_map
@@ -63,14 +66,23 @@ typedef struct path_string {
 // size of the union items
 #define fs_item_size(_item) (_item)->item->st.st_size
 
-int create_path_string(path_string* p_string, const char* path);
+int parse_path_string(path_string* p_string, const char* path);
+/**
+ * Generate path_string and make sure that the path or name is not too long
+ */
+#define create_path_string(_pstring, _path)                  \
+    do {                                                     \
+        int ret;                                             \
+        if ((ret = parse_path_string(_pstring, _path)) != 0) \
+            return ret;                                      \
+    } while (0)
 
 // TODO: make fs_ to reflect syscalls. fs_read, fs_unlink etc
 
 int fs_get_file(path_string* p_string, fs_file** buf);
 int fs_get_item(path_string* p_string, fs_item** buf, int offset);
 int fs_get_directory(path_string* p_string, fs_dir** buf, int offset);
-int fs_add_item(path_string* p_string, FS_ITEM_TYPE type) __attribute__ ((deprecated));
+int fs_add_item(path_string* p_string, FS_ITEM_TYPE type) __attribute__((deprecated));
 bool fs_is_dir(path_string* p_string);
 bool fs_is_file(path_string* p_string);
 bool fs_item_is_dir(fs_item* item);
