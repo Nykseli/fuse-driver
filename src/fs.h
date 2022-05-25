@@ -1,6 +1,7 @@
 #ifndef FS_H
 #define FS_H
 
+#include <fuse.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
@@ -95,6 +96,7 @@ int fs_file_delete(path_string* p_string);
 int fs_rename(path_string* oldpath, path_string* newpath);
 int fs_statvfs(path_string* path, struct statvfs* buf);
 int fs_mknod(path_string* path, mode_t mode, dev_t rdev);
+int fs_chown(path_string* path, uid_t uid, gid_t gid);
 void init_fs();
 void free_fs();
 

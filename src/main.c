@@ -220,8 +220,9 @@ static int fdo_chmod(const char* path, mode_t mode) {
 }
 
 static int fdo_chown(const char* path, uid_t uid, gid_t gid) {
-    printf("fdo_chown unimplemented\n");
-    return -ENOSYS;
+    path_string p_string;
+    create_path_string(&p_string, path);
+    return fs_chown(&p_string, uid, gid);
 }
 
 static int fdo_utimens(const char* path, const struct timespec tv[2]) {
