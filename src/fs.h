@@ -97,6 +97,7 @@ int fs_rename(path_string* oldpath, path_string* newpath);
 int fs_statvfs(path_string* path, struct statvfs* buf);
 int fs_mknod(path_string* path, mode_t mode, dev_t rdev);
 int fs_chown(path_string* path, uid_t uid, gid_t gid);
+int fs_chmod(path_string* path, mode_t mode);
 void init_fs();
 void free_fs();
 

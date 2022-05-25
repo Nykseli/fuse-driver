@@ -575,3 +575,14 @@ int fs_chown(path_string* path, uid_t uid, gid_t gid) {
     item->st.st_gid = gid;
     return 0;
 }
+
+int fs_chmod(path_string* path, mode_t mode) {
+    // TODO: check that the mode is valid
+    fs_item* item;
+    int ret = fs_get_item(path, &item, 0);
+    if (ret != 0)
+        return ret;
+
+    item->st.st_mode = mode;
+    return 0;
+}

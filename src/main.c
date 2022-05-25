@@ -215,8 +215,9 @@ static int fdo_fsyncdir(const char* path, int datasync, struct fuse_file_info* f
 }
 
 static int fdo_chmod(const char* path, mode_t mode) {
-    printf("fdo_chmod unimplemented\n");
-    return -ENOSYS;
+    path_string p_string;
+    create_path_string(&p_string, path);
+    return fs_chmod(&p_string, mode);
 }
 
 static int fdo_chown(const char* path, uid_t uid, gid_t gid) {
