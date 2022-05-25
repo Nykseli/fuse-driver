@@ -15,6 +15,8 @@ static fs_item root_dir;
 
 static void free_fs_item(fs_item* item);
 static int fs_get_dir_item(path_string* p_string, fs_item** buf, int offset);
+static bool fs_item_is_dir(fs_item* item);
+static bool fs_item_is_file(fs_item* item) __attribute_used__; // we might need this in the future
 
 // Get a file from index
 char* ps_file(path_string* p_string, int idx) {
@@ -180,23 +182,6 @@ int parse_path_string(path_string* p_string, const char* path) {
     return 0;
 }
 
-bool fs_is_file(path_string* p_string) {
-    // root dir is not a file
-    if (p_string->files == 0) {
-        return false;
-    }
-
-    return fs_get_file(p_string, NULL) == 0;
-}
-
-int fs_add_item(path_string* p_string, FS_ITEM_TYPE type) {
-    if (type == FS_DIR) {
-        return add_item(p_string, FS_DIR, DEF_DIR_MODE);
-    } else {
-        return add_item(p_string, FS_FILE, DEF_FILE_MODE);
-    }
-}
-
 int fs_dir_delete(path_string* p_string) {
     fs_item* item;
     int ret = fs_get_dir_item(p_string, &item, 0);
@@ -309,12 +294,6 @@ int fs_get_file(path_string* p_string, fs_file** buf) {
         *buf = &fs_item_file(dir);
 
     return 0;
-}
-
-// TODO: create function that checks if path is file, dir or non existing
-//       so we don't need to double check
-bool fs_is_dir(path_string* p_string) {
-    return fs_get_directory(p_string, NULL, 0) == 0;
 }
 
 void init_fs() {
