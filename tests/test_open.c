@@ -4,26 +4,10 @@
  * https://man7.org/linux/man-pages/man2/open.2.html
  */
 
-#include <check.h>
-#include <errno.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <time.h>
-#include <unistd.h>
-
-#define __USE_ATFILE
-#include <fcntl.h>
-#include <stdio.h>
-#include <sys/stat.h>
-
-#include "../src/fs.h"
-#include "../src/util.h"
+#include "test_util.h"
 
 #define LONG_PATH gen_path(4095, false)
 #define LONG_NAME gen_path(256, true)
-
-#define FS_PATH "/tmp/fuse_test/"
 
 char* gen_path(size_t len, bool txt) {
     size_t path_len = strlen(FS_PATH);
