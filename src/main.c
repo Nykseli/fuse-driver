@@ -179,11 +179,16 @@ static int fdo_link(const char* oldpath, const char* newpath) {
 }
 
 static int fdo_open(const char* path, struct fuse_file_info* fi) {
+    mode_t mode = (mode_t)fi->flags;
+    path_string p_string;
+    create_path_string(&p_string, path);
+    return fs_access(&p_string, mode);
+
     // TODO: force files being open when writing etc.
     //       how many times can you open the same file before closing it?
     // TODO: check access modes when implementing file permissions
     // see https://libfuse.github.io/doxygen/structfuse__operations.html#a14b98c3f7ab97cc2ef8f9b1d9dc0709d
-    return 0;
+    // return 0;
 }
 
 static int fdo_fsync(const char* path, int datasync, struct fuse_file_info* fi) {

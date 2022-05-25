@@ -586,3 +586,23 @@ int fs_chmod(path_string* path, mode_t mode) {
     item->st.st_mode = mode;
     return 0;
 }
+
+int fs_access(path_string* path, mode_t mode) {
+    // TODO: check that the mode is valid
+    // TODO use S_IRUSR etc macros
+    // TODO: exec access
+    mode_t rw_flag = mode & 0x3; // rw access is 0, 1, 2 so 3 lowest bits
+    mode_t _acc[] = { 0400, 0200, 0600 };
+    // TODO: chec grop access and all access
+    mode_t access = _acc[rw_flag];
+
+    fs_item* item;
+    int ret = fs_get_item(path, &item, 0);
+    if (ret != 0)
+        return ret;
+
+    if ((access & item->st.st_mode) != access)
+        return -EACCES;
+
+    return 0;
+}
