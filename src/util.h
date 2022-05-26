@@ -2,6 +2,7 @@
 #define UTIL_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/stat.h>
 
 typedef uint64_t file_handle;
@@ -21,5 +22,7 @@ typedef uint64_t file_handle;
 #define S_IFLNK __S_IFLNK // Symbolic link.
 #define S_IFSOCK __S_IFSOCK // Socket.
 #endif
+
+void sleep_ms(int milliseconds);
 
 #endif
