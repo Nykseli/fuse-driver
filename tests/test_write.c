@@ -49,6 +49,10 @@ START_TEST(write_errors) {
     ck_assert_uint_ge(fd, 2);
     fn_errno(write(fd, err, 1), EBADF);
     close(fd);
+    fd = open(FS_PATH "write_test_err.txt", O_RDWR | O_CREAT, DEF_FILE_MODE);
+    ck_assert_uint_ge(fd, 2);
+    close(fd);
+    fn_errno(write(fd, err, 1), EBADF);
     write_err(FS_PATH, O_RDWR, NULL, 1, EBADF); // dir
     write_err(FS_PATH "write_test_err.txt", O_WRONLY | O_CREAT, NULL, 1, EFAULT);
     // TODO: EDESTADDRREQ

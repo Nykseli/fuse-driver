@@ -39,6 +39,11 @@ START_TEST(read_errors) {
     int fd = open(FS_PATH "foo_file.txt", O_WRONLY);
     ck_assert_uint_ge(fd, 2);
     fn_errno(read(fd, err, 1), EBADF);
+    close(fd);
+    fd = open(FS_PATH "foo_file.txt", O_RDONLY);
+    ck_assert_uint_ge(fd, 2);
+    close(fd);
+    fn_errno(read(fd, err, 1), EBADF);
     fd = open(FS_PATH "foo_file.txt", O_RDONLY);
     fn_errno(read(fd, NULL, 1), EFAULT);
     // TODO: EINVAL
