@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "fs.h"
+#include "fs_fh.h"
 
 #define DEF_DIR_MODE S_IFDIR | 0755
 #define DEF_FILE_MODE S_IFREG | 0644
@@ -15,8 +16,6 @@ static fs_item root_dir;
 
 static void free_fs_item(fs_item* item);
 static int fs_get_dir_item(path_string* p_string, fs_item** buf, int offset);
-static bool fs_item_is_dir(fs_item* item);
-static bool fs_item_is_file(fs_item* item) __attribute_used__; // we might need this in the future
 
 // Get a file from index
 char* ps_file(path_string* p_string, int idx) {
@@ -297,10 +296,12 @@ int fs_get_file(path_string* p_string, fs_file** buf) {
 }
 
 void init_fs() {
+    init_fs_fh();
     init_fs_item(&root_dir, "/", NULL, FS_DIR, DEF_DIR_MODE);
 }
 
 void free_fs() {
+    free_fs_fh();
     free_fs_item(&root_dir);
 }
 
@@ -570,7 +571,7 @@ int fs_chmod(path_string* path, mode_t mode) {
     return 0;
 }
 
-int fs_access(path_string* path, mode_t mode) {
+int fs_access(path_string* path, mode_t mode, fs_item** buf) {
     // TODO: check that the mode is valid
     // TODO use S_IRUSR etc macros
     // TODO: exec access
@@ -587,5 +588,54 @@ int fs_access(path_string* path, mode_t mode) {
     if ((access & item->st.st_mode) != access)
         return -EACCES;
 
+    if (buf != NULL)
+        *buf = item;
+
     return 0;
+}
+
+int fs_write(file_handle fh, const char* buffer, size_t size, off_t offset) {
+    fs_file* file;
+    int ret = fs_fh_get_file(fh, &file);
+    if (ret != 0) {
+        return ret;
+    }
+
+    off_t file_size = fs_item_size(file);
+
+    // if offset is not part of the file, the file will end up containing garbage
+    // TODO: what does offset < 0 officially mean?
+    if (offset < 0 || file_size < offset) {
+        return -ESPIPE;
+    }
+
+    off_t new_size = size;
+    if (file->data == NULL) {
+        file->data = malloc(size);
+    } else if (offset + (off_t)size > file_size) {
+        new_size = offset + size;
+        file->data = realloc(file->data, new_size);
+    }
+
+    fs_item_size(file) = new_size;
+    memcpy(file->data + offset, buffer, size);
+    return size;
+}
+
+int fs_read(file_handle fh, char* buffer, size_t size, off_t offset) {
+    fs_file* file;
+    int ret = fs_fh_get_file(fh, &file);
+    if (ret != 0) {
+        return ret;
+    }
+
+    uint64_t file_size = fs_item_size(file);
+    if (file->data == NULL && file_size == 0) {
+        return 0;
+    } else if (size > file_size - offset) {
+        size = file_size - offset;
+    }
+
+    memcpy(buffer, file->data + offset, size);
+    return size;
 }

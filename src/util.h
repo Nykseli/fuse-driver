@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 
+typedef uint64_t file_handle;
+
 // FUSE fs magic for statfs
 #define FUSE_SUPER_MAGIC 0x65735546
 

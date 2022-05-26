@@ -395,6 +395,7 @@ uint32_t murmurhash(const char *key)
 
 //              name,  key type,   value type,     cmp           hash
 sc_map_def_scalar(32,  uint32_t,     uint32_t,     sc_map_eq,    sc_map_hash_32)
+sc_map_def_scalar(32v, uint32_t,     void *,       sc_map_eq,    sc_map_hash_32)
 sc_map_def_scalar(64,  uint64_t,     uint64_t,     sc_map_eq,    sc_map_hash_64)
 sc_map_def_scalar(64v, uint64_t,     void *,       sc_map_eq,    sc_map_hash_64)
 sc_map_def_scalar(64s, uint64_t,     const char *, sc_map_eq,    sc_map_hash_64)

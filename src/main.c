@@ -9,6 +9,7 @@
 #include <sys/types.h>
 
 #include "fs.h"
+#include "fs_fh.h"
 #include "util.h"
 
 static int fdo_mkdir(const char* path, mode_t mode);
@@ -16,7 +17,7 @@ static int fdo_getattr(const char* path, struct stat* st);
 static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi);
 static int fdo_mknod(const char* path, mode_t mode, dev_t rdev);
 static int fdo_read(const char* path, char* buffer, size_t size, off_t offset, struct fuse_file_info* fi);
-static int fdo_write(const char* path, const char* buffer, size_t size, off_t offset, struct fuse_file_info* info);
+static int fdo_write(const char* path, const char* buffer, size_t size, off_t offset, struct fuse_file_info* fi);
 static int fdo_truncate(const char* path, off_t size);
 static int fdo_unlink(const char* path);
 static int fdo_rmdir(const char* path);
@@ -24,6 +25,7 @@ static int fdo_rename(const char* oldpath, const char* newpath);
 static int fdo_symlink(const char* linkname, const char* path);
 static int fdo_link(const char* oldpath, const char* newpath);
 static int fdo_open(const char* path, struct fuse_file_info* fi);
+static int fdo_release(const char* path, struct fuse_file_info* fi);
 static int fdo_fsync(const char* path, int datasync, struct fuse_file_info* fi);
 static int fdo_flush(const char* path, struct fuse_file_info* fi);
 static int fdo_statfs(const char* path, struct statvfs* buf);
@@ -65,13 +67,12 @@ static struct fuse_operations operations = {
     .poll = fdo_poll,
     .fallocate = fdo_fallocate,
     .ioctl = fdo_ioctl,
+    .release = fdo_release,
     // we don't have any xattrs
     // .setxattr = fdo_setxattr,
     // .getxattr = fdo_getxattr,
     // .listxattr = fdo_listxattr,
     // .removexattr = fdo_removexattr,
-    // release gets called after when there is no refs and we don't care about that for now
-    // .release = fdo_release,
     // .releasedir = fdo_releasedir,
     // mknod can handdle the create calls
     // .create = fdo_create,
@@ -98,17 +99,14 @@ static int fdo_getattr(const char* path, struct stat* st) {
 }
 
 static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {
-    path_string p_string;
-    create_path_string(&p_string, path);
-
-    filler(buffer, ".", NULL, 0); // Current Directory
-    filler(buffer, "..", NULL, 0); // Parent Directory
-
     fs_dir* root;
-    int ret = fs_get_directory(&p_string, &root, 0);
+    int ret = fs_fh_get_dir(fi->fh, &root);
     if (ret != 0) {
         return ret;
     }
+
+    filler(buffer, ".", NULL, 0); // Current Directory
+    filler(buffer, "..", NULL, 0); // Parent Directory
 
     const char* key;
     const fs_item* item;
@@ -131,15 +129,11 @@ static int fdo_mknod(const char* path, mode_t mode, dev_t rdev) {
 }
 
 static int fdo_read(const char* path, char* buffer, size_t size, off_t offset, struct fuse_file_info* fi) {
-    path_string p_string;
-    create_path_string(&p_string, path);
-    return fs_file_read(&p_string, buffer, size, offset);
+    return fs_read(fi->fh, buffer, size, offset);
 }
 
-static int fdo_write(const char* path, const char* buffer, size_t size, off_t offset, struct fuse_file_info* info) {
-    path_string p_string;
-    create_path_string(&p_string, path);
-    return fs_file_write(&p_string, buffer, size, offset);
+static int fdo_write(const char* path, const char* buffer, size_t size, off_t offset, struct fuse_file_info* fi) {
+    return fs_write(fi->fh, buffer, size, offset);
 }
 
 static int fdo_truncate(const char* path, off_t size) {
@@ -180,15 +174,25 @@ static int fdo_link(const char* oldpath, const char* newpath) {
 
 static int fdo_open(const char* path, struct fuse_file_info* fi) {
     mode_t mode = (mode_t)fi->flags;
+    fs_item* item;
     path_string p_string;
     create_path_string(&p_string, path);
-    return fs_access(&p_string, mode);
+    int ret = fs_access(&p_string, mode, &item);
+    if (ret != 0)
+        return ret;
+
+    fi->fh = fs_fh_file_handle(item);
 
     // TODO: force files being open when writing etc.
     //       how many times can you open the same file before closing it?
     // TODO: check access modes when implementing file permissions
     // see https://libfuse.github.io/doxygen/structfuse__operations.html#a14b98c3f7ab97cc2ef8f9b1d9dc0709d
-    // return 0;
+    return 0;
+}
+
+static int fdo_release(const char* path, struct fuse_file_info* fi) {
+    fs_fh_release_file(fi->fh);
+    return 0;
 }
 
 static int fdo_fsync(const char* path, int datasync, struct fuse_file_info* fi) {

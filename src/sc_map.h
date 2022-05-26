@@ -213,6 +213,7 @@
 
 //              name  key type      value type
 sc_map_dec_scalar(32,  uint32_t,     uint32_t)
+sc_map_dec_scalar(32v, uint32_t,     void*)
 sc_map_dec_scalar(64,  uint64_t,     uint64_t)
 sc_map_dec_scalar(64v, uint64_t,     void *)
 sc_map_dec_scalar(64s, uint64_t,     const char *)

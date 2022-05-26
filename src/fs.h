@@ -1,7 +1,6 @@
 #ifndef FS_H
 #define FS_H
 
-#include <fuse.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
@@ -84,8 +83,8 @@ int fs_get_file(path_string* p_string, fs_file** buf);
 int fs_get_item(path_string* p_string, fs_item** buf, int offset);
 int fs_get_directory(path_string* p_string, fs_dir** buf, int offset);
 int fs_dir_delete(path_string* p_string);
-int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset);
-int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t offset);
+int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset) __attribute__((deprecated("Use fs_read()")));
+int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t offset) __attribute__((deprecated("Use fs_write()")));
 int fs_file_truncate(path_string* p_string, off_t size);
 int fs_file_delete(path_string* p_string);
 int fs_rename(path_string* oldpath, path_string* newpath);
@@ -94,7 +93,11 @@ int fs_mknod(path_string* path, mode_t mode, dev_t rdev);
 int fs_mkdir(path_string* path, mode_t mode);
 int fs_chown(path_string* path, uid_t uid, gid_t gid);
 int fs_chmod(path_string* path, mode_t mode);
-int fs_access(path_string* path, mode_t mode);
+int fs_access(path_string* path, mode_t mode, fs_item** buf);
+int fs_read(file_handle fh, char* buffer, size_t size, off_t offset);
+int fs_write(file_handle fh, const char* buffer, size_t size, off_t offset);
+bool fs_item_is_dir(fs_item* item);
+bool fs_item_is_file(fs_item* item);
 void init_fs();
 void free_fs();
 
