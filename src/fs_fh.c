@@ -134,6 +134,7 @@ void init_fs_fh() {
     sc_map_init_32v(&fs_pids, 0, 0);
     pthread_create(&clean_thread, NULL, pid_clean_fn, NULL);
 }
+
 void free_fs_fh() {
     fs_fh_pid* pid;
     sc_map_foreach_value(&fs_pids, pid) {

@@ -555,7 +555,7 @@ static int _fs_chown(fs_item* item, uid_t uid, gid_t gid) {
     return 0;
 }
 
-int fs_chown(file_handle fh, uid_t uid, gid_t gid) {
+int fs_fchown(file_handle fh, uid_t uid, gid_t gid) {
     // TODO: make sure that the user can actually set the perms
     fs_item* item;
     int ret = fs_fh_get_item(fh, &item);
@@ -565,7 +565,7 @@ int fs_chown(file_handle fh, uid_t uid, gid_t gid) {
     return _fs_chown(item, uid, gid);
 }
 
-int fs_chown_ps(path_string* path, uid_t uid, gid_t gid) {
+int fs_chown(path_string* path, uid_t uid, gid_t gid) {
     // TODO: make sure that the user can actually set the perms
     fs_item* item;
     int ret = fs_get_item(path, &item, 0);
@@ -581,7 +581,7 @@ static int _fs_chmod(fs_item* item, mode_t mode) {
     return 0;
 }
 
-int fs_chmod(file_handle fh, mode_t mode) {
+int fs_fchmod(file_handle fh, mode_t mode) {
     fs_item* item;
     int ret = fs_fh_get_item(fh, &item);
     if (ret != 0)
@@ -590,7 +590,7 @@ int fs_chmod(file_handle fh, mode_t mode) {
     return _fs_chmod(item, mode);
 }
 
-int fs_chmod_ps(path_string* path, mode_t mode) {
+int fs_chmod(path_string* path, mode_t mode) {
     // TODO: check that the mode is valid
     fs_item* item;
     int ret = fs_get_item(path, &item, 0);
@@ -667,4 +667,45 @@ int fs_read(file_handle fh, char* buffer, size_t size, off_t offset) {
 
     memcpy(buffer, file->data + offset, size);
     return size;
+}
+
+static int _fs_truncate(fs_file* file, off_t size) {
+
+    off_t file_size = fs_item_size(file);
+
+    // If size it is negative, remove the size value from file size
+    if (size < 0) {
+        // We cannot trunk the file size to be < 0
+        if (file_size < size * -1)
+            return -ESPIPE;
+
+        fs_item_size(file) = file_size + size;
+    } else if (file_size < size) {
+        return -ESPIPE;
+    } else {
+        // else we set the size to size
+        fs_item_size(file) = size;
+    }
+
+    return 0;
+}
+
+int fs_truncate(path_string* path, off_t size) {
+    fs_file* file;
+    int ret = fs_get_file(path, &file);
+    if (ret != 0) {
+        return ret;
+    }
+
+    return _fs_truncate(file, size);
+}
+
+int fs_ftruncate(file_handle fh, off_t size) {
+    fs_file* file;
+    int ret = fs_fh_get_file(fh, &file);
+    if (ret != 0) {
+        return ret;
+    }
+
+    return _fs_truncate(file, size);
 }

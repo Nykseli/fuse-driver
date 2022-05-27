@@ -87,16 +87,21 @@ static struct fuse_operations operations = {
 };
 
 static int fdo_getattr(const char* path, struct stat* st, struct fuse_file_info* fi) {
-    path_string p_string;
-    create_path_string(&p_string, path);
-
+    int ret;
     fs_item* item;
-    int ret = fs_get_item(&p_string, &item, 0);
+    path_string p_string;
+
+    if (fi != NULL) {
+        ret = fs_fh_get_item(fi->fh, &item);
+    } else {
+        create_path_string(&p_string, path);
+        ret = fs_get_item(&p_string, &item, 0);
+    }
+
     if (ret != 0)
         return ret;
 
     memcpy(st, &item->st, sizeof(struct stat));
-
     return 0;
 }
 
@@ -140,8 +145,12 @@ static int fdo_write(const char* path, const char* buffer, size_t size, off_t of
 
 static int fdo_truncate(const char* path, off_t size, struct fuse_file_info* fi) {
     path_string p_string;
-    create_path_string(&p_string, path);
-    return fs_file_truncate(&p_string, size);
+    if (fi != NULL) {
+        return fs_ftruncate(fi->fh, size);
+    } else {
+        create_path_string(&p_string, path);
+        return fs_truncate(&p_string, size);
+    }
 }
 
 static int fdo_unlink(const char* path) {
@@ -241,20 +250,20 @@ static int fdo_fsyncdir(const char* path, int datasync, struct fuse_file_info* f
 static int fdo_chmod(const char* path, mode_t mode, struct fuse_file_info* fi) {
     path_string p_string;
     if (fi != NULL) {
-        return fs_chmod(fi->fh, mode);
+        return fs_fchmod(fi->fh, mode);
     } else {
         create_path_string(&p_string, path);
-        return fs_chmod_ps(&p_string, mode);
+        return fs_chmod(&p_string, mode);
     }
 }
 
 static int fdo_chown(const char* path, uid_t uid, gid_t gid, struct fuse_file_info* fi) {
     path_string p_string;
     if (fi != NULL) {
-        return fs_chown(fi->fh, uid, gid);
+        return fs_fchown(fi->fh, uid, gid);
     } else {
         create_path_string(&p_string, path);
-        return fs_chown_ps(&p_string, uid, gid);
+        return fs_chown(&p_string, uid, gid);
     }
 }
 
