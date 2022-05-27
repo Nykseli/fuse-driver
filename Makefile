@@ -1,8 +1,8 @@
 COMPILER = gcc
 BIN_NAME = fuse_mount
 
-CFLAGS = -std=c99 -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wno-unused-result -pedantic -fPIC `pkg-config fuse --cflags`
-LIBS = `pkg-config fuse --libs`
+CFLAGS = -std=c99 -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wno-unused-result -pedantic -fPIC `pkg-config fuse3 --cflags`
+LIBS = `pkg-config fuse3 --libs`
 
 SRC_DIR = src
 SRC_HEADERS := $(wildcard $(SRC_DIR)/*.h)

@@ -1,4 +1,6 @@
 
+#include "util.h"
+
 #include <errno.h>
 #include <fuse.h>
 #include <pthread.h>

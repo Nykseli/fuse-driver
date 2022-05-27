@@ -1,6 +1,8 @@
 
 #define FUSE_USE_VERSION 30
 
+#include "util.h"
+
 #include <errno.h>
 #include <fuse.h>
 #include <stdio.h>
@@ -10,18 +12,17 @@
 
 #include "fs.h"
 #include "fs_fh.h"
-#include "util.h"
 
 static int fdo_mkdir(const char* path, mode_t mode);
-static int fdo_getattr(const char* path, struct stat* st);
-static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi);
+static int fdo_getattr(const char* path, struct stat* st, struct fuse_file_info* fi);
+static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi, enum fuse_readdir_flags flags);
 static int fdo_mknod(const char* path, mode_t mode, dev_t rdev);
 static int fdo_read(const char* path, char* buffer, size_t size, off_t offset, struct fuse_file_info* fi);
 static int fdo_write(const char* path, const char* buffer, size_t size, off_t offset, struct fuse_file_info* fi);
-static int fdo_truncate(const char* path, off_t size);
+static int fdo_truncate(const char* path, off_t size, struct fuse_file_info* fi);
 static int fdo_unlink(const char* path);
 static int fdo_rmdir(const char* path);
-static int fdo_rename(const char* oldpath, const char* newpath);
+static int fdo_rename(const char* oldpath, const char* newpath, unsigned int flags);
 static int fdo_symlink(const char* linkname, const char* path);
 static int fdo_link(const char* oldpath, const char* newpath);
 static int fdo_open(const char* path, struct fuse_file_info* fi);
@@ -30,10 +31,11 @@ static int fdo_fsync(const char* path, int datasync, struct fuse_file_info* fi);
 static int fdo_flush(const char* path, struct fuse_file_info* fi);
 static int fdo_statfs(const char* path, struct statvfs* buf);
 static int fdo_opendir(const char* path, struct fuse_file_info* fi);
+static int fdo_releasedir(const char* path, struct fuse_file_info* fi);
 static int fdo_fsyncdir(const char* path, int datasync, struct fuse_file_info* fi);
-static int fdo_chmod(const char* path, mode_t mode);
-static int fdo_chown(const char* path, uid_t uid, gid_t gid);
-static int fdo_utimens(const char* path, const struct timespec tv[2]);
+static int fdo_chmod(const char* path, mode_t mode, struct fuse_file_info* fi);
+static int fdo_chown(const char* path, uid_t uid, gid_t gid, struct fuse_file_info* fi);
+static int fdo_utimens(const char* path, const struct timespec tv[2], struct fuse_file_info* fi);
 static int fdo_access(const char* path, int mask);
 static int fdo_readlink(const char* path, char* buf, size_t len);
 static int fdo_ioctl(const char* path, int cmd, void* arg, struct fuse_file_info* fi, unsigned int flags, void* data);
@@ -60,6 +62,7 @@ static struct fuse_operations operations = {
     .flush = fdo_flush,
     .fsync = fdo_fsync,
     .opendir = fdo_opendir,
+    .releasedir = fdo_releasedir,
     .readdir = fdo_readdir,
     .fsyncdir = fdo_fsyncdir,
     .access = fdo_access,
@@ -73,7 +76,6 @@ static struct fuse_operations operations = {
     // .getxattr = fdo_getxattr,
     // .listxattr = fdo_listxattr,
     // .removexattr = fdo_removexattr,
-    // .releasedir = fdo_releasedir,
     // mknod can handdle the create calls
     // .create = fdo_create,
     // let kernel handle the locks
@@ -84,7 +86,7 @@ static struct fuse_operations operations = {
     // .read_buf = fdo_read_buf,
 };
 
-static int fdo_getattr(const char* path, struct stat* st) {
+static int fdo_getattr(const char* path, struct stat* st, struct fuse_file_info* fi) {
     path_string p_string;
     create_path_string(&p_string, path);
 
@@ -98,20 +100,20 @@ static int fdo_getattr(const char* path, struct stat* st) {
     return 0;
 }
 
-static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {
+static int fdo_readdir(const char* path, void* buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi, enum fuse_readdir_flags flags) {
     fs_dir* root;
     int ret = fs_fh_get_dir(fi->fh, &root);
     if (ret != 0) {
         return ret;
     }
 
-    filler(buffer, ".", NULL, 0); // Current Directory
-    filler(buffer, "..", NULL, 0); // Parent Directory
+    filler(buffer, ".", NULL, 0, 0); // Current Directory
+    filler(buffer, "..", NULL, 0, 0); // Parent Directory
 
     const char* key;
     const fs_item* item;
     fs_foreach(&root->items, key, item) {
-        filler(buffer, key, &item->st, 0);
+        filler(buffer, key, &item->st, 0, 0);
     }
     return 0;
 }
@@ -136,7 +138,7 @@ static int fdo_write(const char* path, const char* buffer, size_t size, off_t of
     return fs_write(fi->fh, buffer, size, offset);
 }
 
-static int fdo_truncate(const char* path, off_t size) {
+static int fdo_truncate(const char* path, off_t size, struct fuse_file_info* fi) {
     path_string p_string;
     create_path_string(&p_string, path);
     return fs_file_truncate(&p_string, size);
@@ -154,7 +156,7 @@ static int fdo_rmdir(const char* path) {
     return fs_dir_delete(&p_string);
 }
 
-static int fdo_rename(const char* oldpath, const char* newpath) {
+static int fdo_rename(const char* oldpath, const char* newpath, unsigned int flags) {
     path_string old;
     create_path_string(&old, oldpath);
     path_string new;
@@ -214,7 +216,20 @@ static int fdo_statfs(const char* path, struct statvfs* buf) {
 }
 
 static int fdo_opendir(const char* path, struct fuse_file_info* fi) {
-    // TODO: check perms when file perms get implemented
+    mode_t mode = (mode_t)fi->flags;
+    fs_item* item;
+    path_string p_string;
+    create_path_string(&p_string, path);
+    int ret = fs_access(&p_string, mode, &item);
+    if (ret != 0)
+        return ret;
+
+    fi->fh = fs_fh_file_handle(item);
+    return 0;
+}
+
+static int fdo_releasedir(const char* path, struct fuse_file_info* fi) {
+    fs_fh_release_file(fi->fh);
     return 0;
 }
 
@@ -223,19 +238,27 @@ static int fdo_fsyncdir(const char* path, int datasync, struct fuse_file_info* f
     return -ENOSYS;
 }
 
-static int fdo_chmod(const char* path, mode_t mode) {
+static int fdo_chmod(const char* path, mode_t mode, struct fuse_file_info* fi) {
     path_string p_string;
-    create_path_string(&p_string, path);
-    return fs_chmod(&p_string, mode);
+    if (fi != NULL) {
+        return fs_chmod(fi->fh, mode);
+    } else {
+        create_path_string(&p_string, path);
+        return fs_chmod_ps(&p_string, mode);
+    }
 }
 
-static int fdo_chown(const char* path, uid_t uid, gid_t gid) {
+static int fdo_chown(const char* path, uid_t uid, gid_t gid, struct fuse_file_info* fi) {
     path_string p_string;
-    create_path_string(&p_string, path);
-    return fs_chown(&p_string, uid, gid);
+    if (fi != NULL) {
+        return fs_chown(fi->fh, uid, gid);
+    } else {
+        create_path_string(&p_string, path);
+        return fs_chown_ps(&p_string, uid, gid);
+    }
 }
 
-static int fdo_utimens(const char* path, const struct timespec tv[2]) {
+static int fdo_utimens(const char* path, const struct timespec tv[2], struct fuse_file_info* fi) {
     // TODO: update fs_item's stat, check docs what whe tv should affect
     // we don't care times for now so just no-op
     return 0;

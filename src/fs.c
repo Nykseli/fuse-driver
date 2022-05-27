@@ -548,27 +548,56 @@ int fs_mkdir(path_string* path, mode_t mode) {
     return add_item(path, FS_DIR, S_IFDIR | mode);
 }
 
-int fs_chown(path_string* path, uid_t uid, gid_t gid) {
+static int _fs_chown(fs_item* item, uid_t uid, gid_t gid) {
+    // TODO: make sure that the user can actually set the perms
+    item->st.st_uid = uid;
+    item->st.st_gid = gid;
+    return 0;
+}
+
+int fs_chown(file_handle fh, uid_t uid, gid_t gid) {
+    // TODO: make sure that the user can actually set the perms
+    fs_item* item;
+    int ret = fs_fh_get_item(fh, &item);
+    if (ret != 0)
+        return ret;
+
+    return _fs_chown(item, uid, gid);
+}
+
+int fs_chown_ps(path_string* path, uid_t uid, gid_t gid) {
     // TODO: make sure that the user can actually set the perms
     fs_item* item;
     int ret = fs_get_item(path, &item, 0);
     if (ret != 0)
         return ret;
 
-    item->st.st_uid = uid;
-    item->st.st_gid = gid;
+    return _fs_chown(item, uid, gid);
+}
+
+static int _fs_chmod(fs_item* item, mode_t mode) {
+    // TODO: make sure mode is valid
+    item->st.st_mode = mode;
     return 0;
 }
 
-int fs_chmod(path_string* path, mode_t mode) {
+int fs_chmod(file_handle fh, mode_t mode) {
+    fs_item* item;
+    int ret = fs_fh_get_item(fh, &item);
+    if (ret != 0)
+        return ret;
+
+    return _fs_chmod(item, mode);
+}
+
+int fs_chmod_ps(path_string* path, mode_t mode) {
     // TODO: check that the mode is valid
     fs_item* item;
     int ret = fs_get_item(path, &item, 0);
     if (ret != 0)
         return ret;
 
-    item->st.st_mode = mode;
-    return 0;
+    return _fs_chmod(item, mode);
 }
 
 int fs_access(path_string* path, mode_t mode, fs_item** buf) {
