@@ -9,10 +9,19 @@ NC='\033[0m' # No Color
 
 MOUNT_PATH=/tmp/fuse_test
 
+function read_dir {
+    mkdir -p $MOUNT_PATH/read_dir/nest1/nest2
+    touch $MOUNT_PATH/read_dir/empty.txt
+    echo "foo" > $MOUNT_PATH/read_dir/foo.txt
+    echo "bar1" > $MOUNT_PATH/read_dir/nest1/bar.txt
+    echo "zar12" > $MOUNT_PATH/read_dir/nest1/nest2/zar.txt
+}
+
 function set_up {
     mkdir -p $MOUNT_PATH
     ./fuse_mount $MOUNT_PATH
     mkdir -p $MOUNT_PATH/test_dir
+    read_dir
     echo "foo" > $MOUNT_PATH/foo_file.txt
     cp $MOUNT_PATH/foo_file.txt $MOUNT_PATH/foocreat_file.txt
     echo "read only" > $MOUNT_PATH/norw_file.txt

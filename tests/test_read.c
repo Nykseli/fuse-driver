@@ -1,7 +1,10 @@
-// TEST_SYSCALLS: read
+// TEST_SYSCALLS: read readdir
 /**
  * Tests for read syscall
  * https://man7.org/linux/man-pages/man2/read.2.html
+ * Tests for readdir (getdets) syscall
+ * https://man7.org/linux/man-pages/man3/readdir.3.html
+ * https://man7.org/linux/man-pages/man2/getdents.2.html
  */
 
 #include "test_util.h"
@@ -53,6 +56,24 @@ START_TEST(read_errors) {
 }
 END_TEST
 
+START_TEST(readdir_success) {
+    // TODO: make sure symbolic and hardlinks work
+    // TODO: check struct dirent d_type
+    test_readdir(FS_PATH "read_dir", ".", "..", "foo.txt", "nest1", "empty.txt");
+    test_readdir(FS_PATH "read_dir/nest1", ".", "..", "nest2", "bar.txt");
+    test_readdir(FS_PATH "read_dir/nest1/nest2", ".", "..", "zar.txt");
+}
+END_TEST
+
+START_TEST(readdir_errors) {
+    DIR* dh = opendir(FS_PATH "read_dir");
+    closedir(dh);
+    struct dirent* dent = readdir(dh);
+    ck_assert_int_eq(errno, EBADF);
+    ck_assert_ptr_null(dent);
+}
+END_TEST
+
 Suite* read_suite() {
     Suite* s;
     TCase* tc_core;
@@ -67,6 +88,20 @@ Suite* read_suite() {
     return s;
 }
 
+Suite* readdir_suite() {
+    Suite* s;
+    TCase* tc_core;
+
+    // https://iq.opengenus.org/ls-command-in-c/
+    s = suite_create("POSIX readdir");
+    tc_core = tcase_create("POSIX readdir Core");
+    tcase_add_test(tc_core, readdir_success);
+    tcase_add_test(tc_core, readdir_errors);
+    suite_add_tcase(s, tc_core);
+
+    return s;
+}
+
 int main() {
     int number_failed;
     Suite* s;
@@ -74,6 +109,7 @@ int main() {
 
     s = read_suite();
     sr = srunner_create(s);
+    srunner_add_suite(sr, readdir_suite());
 
     srunner_run_all(sr, CK_NORMAL);
     number_failed = srunner_ntests_failed(sr);
