@@ -11,7 +11,11 @@ SRC_OBJECTS := $(addprefix $(SRC_DIR)/, $(notdir $(SRC_SOURCES:.c=.o)))
 
 TEST_DIR = tests
 TEST_HEADERS := $(wildcard $(TEST_DIR)/*.h)
-TEST_SOURCES := $(wildcard $(TEST_DIR)/*.c)
+ifeq ($(TEST_NAME),)
+	TEST_SOURCES := $(wildcard $(TEST_DIR)/*.c)
+else
+	TEST_SOURCES := $(TEST_DIR)/$(TEST_NAME).c
+endif
 TEST_FILES := $(addprefix $(TEST_DIR)/, $(notdir $(TEST_SOURCES:.c=.test)))
 
 ifeq ($(DEBUG), true)
@@ -27,7 +31,7 @@ executable: $(BIN_NAME)
 	@ echo 'To mount: ./'$(BIN_NAME)' -f [mount point]'
 
 test: $(BIN_NAME) $(TEST_FILES)
-	@ bash ./tests/run_tests.sh
+	@ bash ./tests/run_tests.sh $(TEST_NAME)
 
 $(BIN_NAME): $(SRC_OBJECTS)
 	@ printf "%8s %-40s %s\n" $(COMPILER) $(BIN_NAME)

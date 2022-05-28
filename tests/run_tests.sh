@@ -47,7 +47,12 @@ function run_test {
 trap clean_up EXIT
 set_up
 
-TEST_EXECS=`find tests -name "test_*" -executable -type f`
+if [[ -z $1 ]]; then
+    TEST_EXECS=`find tests -name "test_*" -executable -type f`
+else
+    TEST_EXECS=tests/$1.test
+fi
+
 for TEST in $TEST_EXECS
 do
     run_test $TEST
