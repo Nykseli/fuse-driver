@@ -1,4 +1,4 @@
-COMPILER = gcc
+COMPILER = $(CC)
 BIN_NAME = fuse_mount
 
 CFLAGS = -std=c99 -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wno-unused-result -pedantic -fPIC `pkg-config fuse3 --cflags`
@@ -39,11 +39,11 @@ $(BIN_NAME): $(SRC_OBJECTS)
 
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.c $(SRC_HEADERS)
 	@ printf "%8s %-40s %s\n" $(COMPILER) $<
-	@ $(COMPILER) -c $(CFLAGS) -o $@ $< $(LIBS)
+	@ $(COMPILER) -c $(CFLAGS) -o $@ $<
 
 $(TEST_DIR)/%.test: $(TEST_DIR)/%.c $(TEST_HEADERS)
 	@ printf "%8s %-40s %s\n" $(COMPILER) $<
-	@ $(COMPILER) $(CFLAGS) -o $@ $< $(LIBS) -lcheck -lsubunit -lrt -lm -pthread
+	@ $(COMPILER) $(CFLAGS) -o $@ $< -lcheck -lsubunit -lrt -lm -pthread
 
 # build: $(FILESYSTEM_FILES)
 # 	$(COMPILER) -std=c99 -O2 $(FILESYSTEM_FILES) -o lsysfs `pkg-config fuse --cflags --libs`
