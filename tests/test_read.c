@@ -59,9 +59,9 @@ END_TEST
 START_TEST(readdir_success) {
     // TODO: make sure symbolic and hardlinks work
     // TODO: check struct dirent d_type
-    test_readdir(FS_PATH "read_dir", ".", "..", "foo.txt", "nest1", "empty.txt");
-    test_readdir(FS_PATH "read_dir/nest1", ".", "..", "nest2", "bar.txt");
-    test_readdir(FS_PATH "read_dir/nest1/nest2", ".", "..", "zar.txt");
+    test_readdir(FS_PATH "read_dir", ".", "..", "foo.txt", "nest1", "empty.txt", NULL);
+    test_readdir(FS_PATH "read_dir/nest1", ".", "..", "nest2", "bar.txt", NULL);
+    test_readdir(FS_PATH "read_dir/nest1/nest2", ".", "..", "zar.txt", NULL);
 }
 END_TEST
 
@@ -92,7 +92,6 @@ Suite* readdir_suite() {
     Suite* s;
     TCase* tc_core;
 
-    // https://iq.opengenus.org/ls-command-in-c/
     s = suite_create("POSIX readdir");
     tc_core = tcase_create("POSIX readdir Core");
     tcase_add_test(tc_core, readdir_success);
