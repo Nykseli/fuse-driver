@@ -8,6 +8,9 @@
 #include "fs.h"
 #include "fs_fh.h"
 
+// replace malloc with fsalloc
+#include "fsalloc.h"
+
 #define DEF_DIR_MODE S_IFDIR | 0755
 #define DEF_FILE_MODE S_IFREG | 0644
 

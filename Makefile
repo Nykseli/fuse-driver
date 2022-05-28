@@ -15,10 +15,15 @@ TEST_SOURCES := $(wildcard $(TEST_DIR)/*.c)
 TEST_FILES := $(addprefix $(TEST_DIR)/, $(notdir $(TEST_SOURCES:.c=.test)))
 
 ifeq ($(DEBUG), true)
-	CFLAGS += -g
+	CFLAGS += -g3
 else
 # TODO: use -s flag?
 	CFLAGS += -O2 -flto -Werror
+endif
+
+# Always save debug info for perf
+ifeq ($(PERF), true)
+	CFLAGS += -g3
 endif
 
 all: executable

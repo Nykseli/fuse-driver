@@ -11,6 +11,9 @@
 #include "fs_fh.h"
 #include "sc_map.h"
 
+// replace malloc with fsalloc
+#include "fsalloc.h"
+
 // pid is 32 bits so 64-32 = 32
 #define PID_OFFSET 32
 
@@ -132,6 +135,7 @@ int fs_fh_get_dir(file_handle fh, fs_dir** buf) {
 
 void init_fs_fh() {
     sc_map_init_32v(&fs_pids, 0, 0);
+    // TODO: pthread with fsalloc will cause memory corruption. fix fsalloc/fsfree
     pthread_create(&clean_thread, NULL, pid_clean_fn, NULL);
 }
 

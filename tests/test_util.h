@@ -9,7 +9,9 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifndef __USE_ATFILE
 #define __USE_ATFILE
+#endif
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -22,8 +24,7 @@
 #define DEF_DIR_MODE S_IFDIR | 0755
 #define DEF_FILE_MODE S_IFREG | 0644
 
-
-#define fn_errno(_fn, _err)  \
+#define fn_errno(_fn, _err)    \
     ck_assert_int_eq(_fn, -1); \
     ck_assert_int_eq(errno, _err)
 
