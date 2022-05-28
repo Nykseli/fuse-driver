@@ -14,6 +14,8 @@
 // pid is 32 bits so 64-32 = 32
 #define PID_OFFSET 32
 
+static file_handle add_file(pid_t pid, const fs_item* item) __nonnull((2));
+
 typedef struct fs_fh_pid {
     pid_t pid;
     // what what next opened file should have as a fd
@@ -63,20 +65,20 @@ static fs_fh_pid* new_ffp(pid_t pid) {
     return new;
 }
 
-static file_handle add_file(pid_t pid, fs_item* item) {
+static file_handle add_file(pid_t pid, const fs_item* item) {
     fs_fh_pid* ffp = sc_map_get_32v(&fs_pids, pid);
     if (!sc_map_found(&fs_pids)) {
         ffp = new_ffp(pid);
         sc_map_put_32v(&fs_pids, pid, ffp);
     }
 
-    sc_map_put_32v(&ffp->items, ffp->next_fd, item);
+    sc_map_put_32v(&ffp->items, ffp->next_fd, (void*)item);
     file_handle handle = ((uint64_t)pid << PID_OFFSET) + ffp->next_fd;
     ffp->next_fd += 1;
     return handle;
 }
 
-file_handle fs_fh_file_handle(fs_item* item) {
+file_handle fs_fh_file_handle(const fs_item* item) {
     // TODO: too many files open error
     pid_t pid = fuse_get_context()->pid;
     return add_file(pid, item);

@@ -14,24 +14,32 @@
 // root is directory type item
 static fs_item root_dir;
 
-static void free_fs_item(fs_item* item);
-static int fs_get_dir_item(path_string* p_string, fs_item** buf, int offset);
+static void free_fs_item(fs_item* item) __nonnull((1));
+static int fs_get_dir_item(const path_string* p_string, fs_item** buf, int offset) __nonnull((1));
+static void init_fs_file(fs_item* file_item, mode_t mode) __nonnull((1));
+static void free_fs_file(const fs_file* file) __nonnull((1));
+static void init_fs_dir(fs_item* dir_item, mode_t mode) __nonnull((1));
+static void free_fs_dir(fs_dir* dir) __nonnull((1));
+static void init_fs_item(fs_item* item, const char* name, fs_item* parent, FS_ITEM_TYPE type, mode_t mode) __nonnull((1, 2));
+static void free_fs_item(fs_item* item) __nonnull((1));
+static int split_file_path(char* path, int* idx_buff);
+static int add_item(const path_string* p_string, FS_ITEM_TYPE type, mode_t mode);
 
 // Get a file from index
-char* ps_file(path_string* p_string, int idx) {
+const char* ps_file(const path_string* p_string, int idx) {
     return &p_string->path_copy[p_string->idx_buff[idx]];
 }
 
 // Get name of the last file
-char* ps_last_file(path_string* p_string) {
+const char* ps_last_file(const path_string* p_string) {
     return &p_string->path_copy[p_string->idx_buff[p_string->files - 1]];
 }
 
-bool fs_item_is_dir(fs_item* item) {
+bool fs_item_is_dir(const fs_item* item) {
     return item->st.st_mode & S_IFDIR;
 }
 
-bool fs_item_is_file(fs_item* item) {
+bool fs_item_is_file(const fs_item* item) {
     return item->st.st_mode & S_IFREG;
 }
 
@@ -54,7 +62,7 @@ static void init_fs_file(fs_item* file_item, mode_t mode) {
     st->st_blocks = 0; // Ignore this until we find a use for it
 }
 
-static void free_fs_file(fs_file* file) {
+static void free_fs_file(const fs_file* file) {
     if (file->data != NULL) {
         free(file->data);
     }
@@ -157,13 +165,13 @@ static int split_file_path(char* path, int* idx_buff) {
     return idx_count;
 }
 
-static int add_item(path_string* p_string, FS_ITEM_TYPE type, mode_t mode) {
+static int add_item(const path_string* p_string, FS_ITEM_TYPE type, mode_t mode) {
     fs_item* cdir;
     int ret = fs_get_dir_item(p_string, &cdir, 1);
     if (ret != 0)
         return ret;
 
-    char* last_file = ps_last_file(p_string);
+    const char* last_file = ps_last_file(p_string);
     fs_item* new_item = malloc(sizeof(fs_item));
     init_fs_item(new_item, last_file, cdir, type, mode);
     sc_map_put_sv(&fs_item_dir(cdir).items, new_item->name, (void*)new_item);
@@ -181,7 +189,7 @@ int parse_path_string(path_string* p_string, const char* path) {
     return 0;
 }
 
-int fs_dir_delete(path_string* p_string) {
+int fs_dir_delete(const path_string* p_string) {
     fs_item* item;
     int ret = fs_get_dir_item(p_string, &item, 0);
     if (ret != 0) {
@@ -199,7 +207,7 @@ int fs_dir_delete(path_string* p_string) {
     return 0;
 }
 
-int fs_get_item(path_string* p_string, fs_item** buf, int offset) {
+int fs_get_item(const path_string* p_string, fs_item** buf, int offset) {
     if (offset < 0) {
         offset = 0;
     }
@@ -208,7 +216,7 @@ int fs_get_item(path_string* p_string, fs_item** buf, int offset) {
     fs_item* found = &root_dir;
     int loop_count = p_string->files - offset;
     for (int ii = 0; ii < loop_count; ii++) {
-        char* p = ps_file(p_string, ii);
+        const char* p = ps_file(p_string, ii);
         fs_item* next = sc_map_get_sv(&cdir->items, p);
         if (!sc_map_found(&cdir->items)) {
             return -ENOENT;
@@ -230,7 +238,7 @@ int fs_get_item(path_string* p_string, fs_item** buf, int offset) {
 /**
  * Get fs_item that is always a directory type.
  */
-int fs_get_dir_item(path_string* p_string, fs_item** buf, int offset) {
+int fs_get_dir_item(const path_string* p_string, fs_item** buf, int offset) {
     fs_item* found;
     int ret = fs_get_item(p_string, &found, offset);
     if (ret != 0) {
@@ -250,7 +258,7 @@ int fs_get_dir_item(path_string* p_string, fs_item** buf, int offset) {
  * Offset decides the dir relative to path. 0 is last, 1 one before that etc.
  * If offset is < 0, it's set to 0
  */
-int fs_get_directory(path_string* p_string, fs_dir** buf, int offset) {
+int fs_get_directory(const path_string* p_string, fs_dir** buf, int offset) {
     fs_item* dir;
     int ret = fs_get_dir_item(p_string, &dir, offset);
     if (ret != 0)
@@ -265,7 +273,7 @@ int fs_get_directory(path_string* p_string, fs_dir** buf, int offset) {
 /**
  * Get fs_item that is always a file type.
  */
-int fs_get_file_item(path_string* p_string, fs_item** buf) {
+int fs_get_file_item(const path_string* p_string, fs_item** buf) {
     fs_item* found;
     int ret = fs_get_item(p_string, &found, 0);
     if (ret != 0) {
@@ -283,7 +291,7 @@ int fs_get_file_item(path_string* p_string, fs_item** buf) {
 /**
  * Get file. If returns != 0, error occurred.
  */
-int fs_get_file(path_string* p_string, fs_file** buf) {
+int fs_get_file(const path_string* p_string, fs_file** buf) {
     fs_item* dir;
     int ret = fs_get_file_item(p_string, &dir);
     if (ret != 0)
@@ -377,7 +385,7 @@ int fs_file_truncate(path_string* p_string, off_t size) {
     return 0;
 }
 
-int fs_file_delete(path_string* p_string) {
+int fs_file_delete(const path_string* p_string) {
     fs_item* file;
     int ret = fs_get_file_item(p_string, &file);
     if (ret != 0) {
@@ -409,7 +417,7 @@ int fs_file_delete(path_string* p_string) {
  * TODO: implement this when we have symbolic links
  * If oldpath refers to a symbolic link, the link is renamed; if newpath refers to a symbolic link, the link will be overwritten.
  */
-int fs_rename(path_string* oldpath, path_string* newpath) {
+int fs_rename(const path_string* oldpath, const path_string* newpath) {
     // we cannot move the root file
     if (oldpath->files == 0) {
         return -EPERM;
@@ -487,7 +495,7 @@ int fs_rename(path_string* oldpath, path_string* newpath) {
  * fuse fs.
  * The 'f_favail', 'f_fsid' and 'f_flag' fields are ignored.
  */
-int fs_statvfs(path_string* path, struct statvfs* buf) {
+int fs_statvfs(const path_string* path, struct statvfs* buf) {
     /**
      * sysinfo doesn't give completely accurate mem info-
      * freeram in sysinfo is not exactly "free RAM".
@@ -540,11 +548,11 @@ int fs_statvfs(path_string* path, struct statvfs* buf) {
     return 0;
 }
 
-int fs_mknod(path_string* path, mode_t mode, dev_t rdev) {
+int fs_mknod(const path_string* path, mode_t mode, dev_t rdev) {
     return add_item(path, FS_FILE, mode);
 }
 
-int fs_mkdir(path_string* path, mode_t mode) {
+int fs_mkdir(const path_string* path, mode_t mode) {
     return add_item(path, FS_DIR, S_IFDIR | mode);
 }
 
@@ -565,7 +573,7 @@ int fs_fchown(file_handle fh, uid_t uid, gid_t gid) {
     return _fs_chown(item, uid, gid);
 }
 
-int fs_chown(path_string* path, uid_t uid, gid_t gid) {
+int fs_chown(const path_string* path, uid_t uid, gid_t gid) {
     // TODO: make sure that the user can actually set the perms
     fs_item* item;
     int ret = fs_get_item(path, &item, 0);
@@ -590,7 +598,7 @@ int fs_fchmod(file_handle fh, mode_t mode) {
     return _fs_chmod(item, mode);
 }
 
-int fs_chmod(path_string* path, mode_t mode) {
+int fs_chmod(const path_string* path, mode_t mode) {
     // TODO: check that the mode is valid
     fs_item* item;
     int ret = fs_get_item(path, &item, 0);
@@ -600,7 +608,7 @@ int fs_chmod(path_string* path, mode_t mode) {
     return _fs_chmod(item, mode);
 }
 
-int fs_access(path_string* path, mode_t mode, fs_item** buf) {
+int fs_access(const path_string* path, mode_t mode, fs_item** buf) {
     // TODO: check that the mode is valid
     // TODO use S_IRUSR etc macros
     // TODO: exec access
@@ -690,7 +698,7 @@ static int _fs_truncate(fs_file* file, off_t size) {
     return 0;
 }
 
-int fs_truncate(path_string* path, off_t size) {
+int fs_truncate(const path_string* path, off_t size) {
     fs_file* file;
     int ret = fs_get_file(path, &file);
     if (ret != 0) {

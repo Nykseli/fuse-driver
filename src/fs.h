@@ -66,7 +66,7 @@ typedef struct path_string {
 // size of the union items
 #define fs_item_size(_item) (_item)->item->st.st_size
 
-int parse_path_string(path_string* p_string, const char* path);
+int parse_path_string(path_string* p_string, const char* path) __nonnull((1, 2));
 /**
  * Generate path_string and make sure that the path or name is not too long
  */
@@ -79,29 +79,29 @@ int parse_path_string(path_string* p_string, const char* path);
 
 // TODO: make fs_ to reflect syscalls. fs_read, fs_unlink etc
 
-int fs_get_file(path_string* p_string, fs_file** buf);
-int fs_get_item(path_string* p_string, fs_item** buf, int offset);
-int fs_get_directory(path_string* p_string, fs_dir** buf, int offset);
-int fs_dir_delete(path_string* p_string);
+int fs_get_file(const path_string* p_string, fs_file** buf) __nonnull((1));
+int fs_get_item(const path_string* p_string, fs_item** buf, int offset) __nonnull((1));
+int fs_get_directory(const path_string* p_string, fs_dir** buf, int offset) __nonnull((1));
+int fs_dir_delete(const path_string* p_string) __nonnull((1));
 int fs_file_read(path_string* p_string, char* buffer, size_t size, off_t offset) __attribute__((deprecated("Use fs_read()")));
 int fs_file_write(path_string* p_string, const char* buffer, size_t size, off_t offset) __attribute__((deprecated("Use fs_write()")));
 int fs_file_truncate(path_string* p_string, off_t size) __attribute__((deprecated("Use fs_truncate()")));
-int fs_file_delete(path_string* p_string);
-int fs_rename(path_string* oldpath, path_string* newpath);
-int fs_statvfs(path_string* path, struct statvfs* buf);
-int fs_mknod(path_string* path, mode_t mode, dev_t rdev);
-int fs_mkdir(path_string* path, mode_t mode);
-int fs_chown(path_string* path, uid_t uid, gid_t gid);
+int fs_file_delete(const path_string* p_string) __nonnull((1));
+int fs_rename(const path_string* oldpath, const path_string* newpath) __nonnull((1, 2));
+int fs_statvfs(const path_string* path, struct statvfs* buf) __nonnull((2));
+int fs_mknod(const path_string* path, mode_t mode, dev_t rdev) __nonnull((1));
+int fs_mkdir(const path_string* path, mode_t mode) __nonnull((1));
+int fs_chown(const path_string* path, uid_t uid, gid_t gid) __nonnull((1));
 int fs_fchown(file_handle fh, uid_t uid, gid_t gid);
-int fs_chmod(path_string* path, mode_t mode);
+int fs_chmod(const path_string* path, mode_t mode) __nonnull((1));
 int fs_fchmod(file_handle fh, mode_t mode);
-int fs_access(path_string* path, mode_t mode, fs_item** buf);
-int fs_read(file_handle fh, char* buffer, size_t size, off_t offset);
-int fs_write(file_handle fh, const char* buffer, size_t size, off_t offset);
-int fs_truncate(path_string* p_string, off_t size);
+int fs_access(const path_string* path, mode_t mode, fs_item** buf) __nonnull((1));
+int fs_read(file_handle fh, char* buffer, size_t size, off_t offset) __nonnull((2));
+int fs_write(file_handle fh, const char* buffer, size_t size, off_t offset) __nonnull((2));
+int fs_truncate(const path_string* p_string, off_t size) __nonnull((1));
 int fs_ftruncate(file_handle fh, off_t size);
-bool fs_item_is_dir(fs_item* item);
-bool fs_item_is_file(fs_item* item);
+bool fs_item_is_dir(const fs_item* item) __nonnull((1));
+bool fs_item_is_file(const fs_item* item) __nonnull((1));
 void init_fs();
 void free_fs();
 
