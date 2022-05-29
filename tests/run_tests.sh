@@ -17,11 +17,23 @@ function read_dir {
     echo "zar12" > $MOUNT_PATH/read_dir/nest1/nest2/zar.txt
 }
 
+function unlink_setup {
+    mkdir -p $MOUNT_PATH/unlink/{unlink,unlinkat,rmdir,no-rm}
+    echo "foo" > $MOUNT_PATH/unlink/foo.txt
+    echo "fooat" > $MOUNT_PATH/unlink/fooat.txt
+    echo "bar" > $MOUNT_PATH/unlink/unlink/bar.txt
+    echo "bar2" > $MOUNT_PATH/unlink/unlinkat/bar2.txt
+    echo "zar" > $MOUNT_PATH/unlink/unlinkat/zar.txt
+    echo "har" > $MOUNT_PATH/unlink/rmdir/har.txt
+    echo "no" > $MOUNT_PATH/unlink/no-rm/bar.txt
+}
+
 function set_up {
     mkdir -p $MOUNT_PATH
     ./fuse_mount $MOUNT_PATH
     mkdir -p $MOUNT_PATH/test_dir
     read_dir
+    unlink_setup
     echo "foo" > $MOUNT_PATH/foo_file.txt
     cp $MOUNT_PATH/foo_file.txt $MOUNT_PATH/foocreat_file.txt
     echo "read only" > $MOUNT_PATH/norw_file.txt

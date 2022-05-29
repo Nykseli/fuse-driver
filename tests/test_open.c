@@ -6,24 +6,6 @@
 
 #include "test_util.h"
 
-#define LONG_PATH gen_path(4095, false)
-#define LONG_NAME gen_path(256, true)
-
-char* gen_path(size_t len, bool txt) {
-    size_t path_len = strlen(FS_PATH);
-    path_len += len;
-    if (txt)
-        len += 4;
-    char* path = malloc(path_len + 1);
-    memcpy(path, FS_PATH, 15);
-    for (size_t ii = 15; ii < path_len; ii++)
-        path[ii] = 'A';
-    if (txt)
-        memcpy(path + (path_len - 4), ".txt", 4);
-    path[path_len] = '\0';
-    return path;
-}
-
 #define stat_equal(_fpath, _st1, _st2)                     \
     ck_assert_int_eq(stat(_fpath, _st2), 0);               \
     ck_assert_uint_eq((_st1)->st_uid, (_st2)->st_uid);     \
