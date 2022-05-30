@@ -25,6 +25,11 @@ else
 	CFLAGS += -O2 -flto -Werror
 endif
 
+# Use nonnull attribute (currently requires custom gcc compiler)
+ifeq ($(NONZERO), true)
+	CFLAGS += -DNONZERO_COMPILER -Wnonzero -Wnonzero-compare
+endif
+
 all: executable
 
 executable: $(BIN_NAME)

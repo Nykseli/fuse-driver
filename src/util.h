@@ -15,6 +15,13 @@
 
 typedef uint64_t file_handle;
 
+// TODO: better check if compiler supports the nonzero attribute
+#ifdef NONZERO_COMPILER
+#define __nonzero(params) __attribute__((__nonzero__ params))
+#else
+#define __nonzero(params)
+#endif
+
 // FUSE fs magic for statfs
 #define FUSE_SUPER_MAGIC 0x65735546
 
